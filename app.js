@@ -166,7 +166,7 @@
     activeSets: [...DATA.comboSets],
     practiceFilter: 'all',
     mySurveyOnly: false,
-    isQuestionBlurred: false,
+    isQuestionBlurred: localStorage.getItem('opic_q_blur') !== '0',
     showKo: false,
     hasReplayed: false,
     prepTimerId: null,
@@ -340,6 +340,10 @@
     btnSpeakMyAnswer: $('btnSpeakMyAnswer'),
     btnClearTranscript: $('btnClearTranscript'),
     btnSkipQuestion: $('btnSkipQuestion'),
+    mockVizCard: $('mockVizCard'),
+    mockWaveCanvas: $('mockWaveCanvas'),
+    vizStatus: $('vizStatus'),
+    vizTimer: $('vizTimer'),
 
     metricWords: $('metricWords'),
     metricWpm: $('metricWpm'),
@@ -1143,6 +1147,8 @@
     document.body.classList.toggle('is-mock', state.studioMode === 'mock');
     els.studioModeSeg.hidden = forced;
     els.mockTimer.hidden = state.studioMode !== 'mock';
+    els.mockVizCard.hidden = state.studioMode !== 'mock';
+    if (state.studioMode === 'mock' && els.vizTimer) els.vizTimer.textContent = '00:00';
     els.studioModeSeg.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('active', b.dataset.mode === (exam ? 'exam' : 'train')));
   }
 
@@ -1334,11 +1340,13 @@
       els.evaStatusPill.textContent = '듣고 있어요. 편하게 말해보세요';
       els.micLiveBadge.textContent = 'LIVE';
       els.micLiveBadge.classList.add('live');
+      if (els.vizStatus) { els.vizStatus.innerHTML = '<span class="viz-dot"></span>듣고 있어요'; els.vizStatus.classList.add('live'); }
 
       const targetSec = getCurrentQuestion().targetSec || 65;
       state.recordingTimerId = setInterval(() => {
         state.recordingSeconds += 1;
         els.recordingTimer.textContent = formatTime(state.recordingSeconds);
+        if (els.vizTimer) els.vizTimer.textContent = formatTime(state.recordingSeconds);
         const pct = Math.min(100, Math.round((state.recordingSeconds / targetSec) * 100));
         els.timeProgressBar.style.width = `${pct}%`;
         els.timeProgressBar.classList.toggle('over', pct >= 100);
@@ -1502,6 +1510,9 @@
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     drawBars(ctx, canvas, new Array(40).fill(4), cssVar('--wave-idle') || '#e5e8eb');
+    const big = els.mockWaveCanvas;
+    if (big) drawBars(big.getContext('2d'), big, new Array(48).fill(6), cssVar('--wave-idle') || '#e5e8eb');
+    if (els.vizStatus) { els.vizStatus.innerHTML = '<span class="viz-dot"></span>마이크 대기'; els.vizStatus.classList.remove('live'); }
   }
 
   function drawLiveWaveform() {
@@ -1525,7 +1536,17 @@
         vals.push(Math.max(4, (v / 255) * (canvas.height - 4)));
       }
       drawBars(ctx, canvas, vals, (i, h) => (h > 14 ? primary : muted));
+      const big = els.mockWaveCanvas;
+      if (big && !els.mockVizCard.hidden) {
+        const bvals = [];
+        for (let i = 0; i < 48; i++) {
+          const v = dataArray[Math.abs(24 - i) % dataArray.length] || 0;
+          bvals.push(Math.max(6, (v / 255) * (big.height - 8)));
+        }
+        drawBars(big.getContext('2d'), big, bvals, (i, hh) => (hh > 24 ? primary : muted));
+      }
     }
+    if (els.vizStatus) { els.vizStatus.innerHTML = '<span class="viz-dot"></span>듣고 있어요'; els.vizStatus.classList.add('live'); }
     frame();
   }
 
@@ -2349,21 +2370,26 @@
     els.evaStatusPill.textContent = '재생 버튼을 누르면 듣기 → 준비 → 녹음이 자동으로 이어져요';
 
     els.questionStepPills.innerHTML = '';
+    const locked = state.studioMode === 'mock' || state.studioMode === 'leveltest';
     set.questions.forEach((item, idx) => {
-      const btn = document.createElement('button');
+      const seg = document.createElement('button');
       const status = idx === state.currentQIndex ? 'active' : idx < state.currentQIndex ? 'done' : '';
-      btn.className = `q-step ${status}`;
-      btn.innerHTML = `<span class="q-step-bar"></span><span class="q-step-name">Q${idx + 1} · ${esc(item.badge.replace(/^콤보 \d+ · |^\d+번 · /, ''))}</span>`;
-      btn.title = item.badge;
-      btn.disabled = state.studioMode === 'mock' || state.studioMode === 'leveltest';
-      btn.onclick = () => {
-        if (btn.disabled) return;
+      seg.className = `q-seg ${status}`;
+      seg.title = `Q${idx + 1} · ${item.badge}`;
+      seg.setAttribute('aria-label', seg.title);
+      seg.disabled = locked;
+      seg.onclick = () => {
+        if (seg.disabled) return;
         state.currentQIndex = idx;
         resetTranscript();
         renderCurrentQuestion();
       };
-      els.questionStepPills.appendChild(btn);
+      els.questionStepPills.appendChild(seg);
     });
+    const gl = document.getElementById('qGaugeLabel');
+    if (gl) gl.textContent = `${state.currentQIndex + 1} / ${set.questions.length}`;
+    // 모의고사·레벨테스트는 문항마다 지문을 다시 숨긴다
+    if (locked) state.isQuestionBlurred = true;
 
     els.qBadgeText.textContent = `시험 ${q.qNum}번 · ${q.badge}`;
     els.questionTextEn.textContent = q.promptEn;
@@ -2387,6 +2413,9 @@
   function applyBlur() {
     els.questionTextEn.classList.toggle('blurred-text', state.isQuestionBlurred);
     els.questionTextKo.classList.toggle('blurred-text', state.isQuestionBlurred);
+    els.questionTextEn.title = state.isQuestionBlurred ? '눌러서 지문 보기' : '눌러서 지문 가리기';
+    const hint = document.getElementById('qBlurHint');
+    if (hint) hint.hidden = !state.isQuestionBlurred;
     els.btnToggleBlur.classList.toggle('on', state.isQuestionBlurred);
     els.btnToggleBlur.innerHTML = icon(state.isQuestionBlurred ? 'eye-off' : 'eye');
     els.btnToggleBlur.setAttribute('aria-label', state.isQuestionBlurred ? '질문 보기' : '질문 가리기');
@@ -3364,10 +3393,14 @@
     els.btnMainAction.onclick = onMainAction;
     els.btnReplayQuestion.onclick = () => playQuestionAndStartPrepFlow(true);
 
-    els.btnToggleBlur.onclick = () => {
+    const toggleBlur = () => {
       state.isQuestionBlurred = !state.isQuestionBlurred;
+      if (state.studioMode === 'practice' || state.studioMode === 'daily') localStorage.setItem('opic_q_blur', state.isQuestionBlurred ? '1' : '0');
       applyBlur();
     };
+    els.btnToggleBlur.onclick = toggleBlur;
+    els.questionTextEn.onclick = toggleBlur;
+    els.questionTextKo.onclick = toggleBlur;
     els.btnToggleKo.onclick = () => {
       state.showKo = !state.showKo;
       els.questionTextKo.hidden = !state.showKo;

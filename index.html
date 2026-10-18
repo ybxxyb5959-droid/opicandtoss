@@ -514,17 +514,22 @@
         <select id="comboSetSelect" class="visually-hidden" tabindex="-1" aria-hidden="true"></select>
 
         <!-- 문제 진행 표시 -->
-        <div id="questionStepPills" class="q-steps"></div>
+        <div class="q-gauge-wrap">
+          <div id="questionStepPills" class="q-gauge" role="group" aria-label="문항 진행"></div>
+          <span id="qGaugeLabel" class="q-gauge-label">1 / 1</span>
+        </div>
 
         <!-- 에바 스테이지 -->
         <div class="eva-stage">
-          <button id="btnSkipQuestion" class="skip-pill" aria-label="이 문제 건너뛰기">스킵<svg class="ic ic-sm"><use href="#i-skip"/></svg></button>
-          <div class="flow-step-indicator">
-            <span id="flowBadgeListen" class="flow-step-badge active">듣기</span>
-            <span class="flow-sep"></span>
-            <span id="flowBadgePrep" class="flow-step-badge">준비</span>
-            <span class="flow-sep"></span>
-            <span id="flowBadgeSpeak" class="flow-step-badge">말하기</span>
+          <div class="stage-top">
+            <div class="flow-step-indicator">
+              <span id="flowBadgeListen" class="flow-step-badge active">듣기</span>
+              <span class="flow-sep"></span>
+              <span id="flowBadgePrep" class="flow-step-badge">준비</span>
+              <span class="flow-sep"></span>
+              <span id="flowBadgeSpeak" class="flow-step-badge">말하기</span>
+            </div>
+            <button id="btnSkipQuestion" class="skip-pill" aria-label="이 문제 건너뛰기">스킵<svg class="ic ic-sm"><use href="#i-skip"/></svg></button>
           </div>
 
           <div id="evaAvatar" class="eva-circle">
@@ -597,8 +602,18 @@
         </div>
         <div id="fillerQuickBar" class="chip-scroll"></div>
 
+        <!-- 모의고사: 녹음 비주얼라이저 (스크립트 대신) -->
+        <div id="mockVizCard" class="card viz-card" hidden>
+          <div class="viz-head">
+            <span id="vizStatus" class="viz-status"><span class="viz-dot"></span>마이크 대기</span>
+            <span id="vizTimer" class="viz-timer">00:00</span>
+          </div>
+          <canvas id="mockWaveCanvas" width="600" height="120"></canvas>
+          <p class="caption viz-hint">실제 시험처럼 스크립트는 보이지 않아요. 끝나면 리포트에서 다시 들을 수 있어요.</p>
+        </div>
+
         <!-- 실시간 스크립트 -->
-        <div class="card">
+        <div class="card" id="transcriptCard">
           <div class="row-between">
             <h3 class="h3">내 답변 스크립트</h3>
             <div class="row-gap">

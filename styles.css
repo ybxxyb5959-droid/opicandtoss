@@ -1147,7 +1147,7 @@ body.is-exam-view .story-hints { display: none; }
 /* 스킵 버튼 (파란 타원 · 흰 글씨) */
 .eva-stage { position: relative; }
 .skip-pill {
-  position: absolute; top: 0.8rem; right: 0.8rem; z-index: 2;
+  position: static; flex-shrink: 0;
   display: inline-flex; align-items: center; gap: 0.25rem;
   height: 32px; padding: 0 0.85rem 0 0.95rem; border-radius: 999px;
   background: var(--primary); color: #fff;
@@ -1158,10 +1158,47 @@ body.is-exam-view .story-hints { display: none; }
 .skip-pill .ic { fill: currentColor; stroke: none; width: 14px; height: 14px; }
 .skip-pill:hover { background: var(--primary-press); }
 .skip-pill:active { transform: scale(0.95); }
-.flow-step-indicator { padding: 0 2.6rem; }
+
 
 /* 스크립트: 읽기 전용 */
 .transcript.readonly { background: var(--surface-2); cursor: default; }
 .transcript.readonly:focus { border-color: transparent; background: var(--surface-2); }
 
 .ob-title .accent { color: var(--primary); }
+
+/* 문항 진행 게이지 */
+.q-gauge-wrap { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.8rem; }
+.q-gauge { flex: 1; display: flex; gap: 3px; height: 8px; }
+.q-seg { flex: 1; height: 100%; border-radius: 999px; background: var(--surface-3); padding: 0; transition: background 0.25s, transform 0.15s; }
+.q-seg.done { background: var(--primary); opacity: 0.55; }
+.q-seg.active { background: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+.q-seg:not(:disabled):hover { transform: scaleY(1.6); }
+.q-seg:disabled { cursor: default; }
+.q-gauge-label { font-size: 0.78rem; font-weight: 800; color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.q-steps { display: none; }
+
+/* 지문 숨김: 눌러서 보기 */
+.q-en.on-dark, .q-ko.on-dark { cursor: pointer; }
+.blurred-text { position: relative; }
+
+/* 모의고사 비주얼라이저 */
+.viz-card { padding: 1rem 1.1rem 0.9rem; }
+.viz-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+.viz-status { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.86rem; font-weight: 700; color: var(--text-3); }
+.viz-status.live { color: var(--danger); }
+.viz-dot { width: 9px; height: 9px; border-radius: 50%; background: currentColor; opacity: 0.5; }
+.viz-status.live .viz-dot { opacity: 1; animation: blink 1s infinite; }
+.viz-timer { font-size: 1.3rem; font-weight: 850; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+#mockWaveCanvas { display: block; width: 100%; height: 120px; }
+.viz-hint { margin-top: 0.5rem; text-align: center; }
+body.is-mock #transcriptCard,
+body.is-mock .segmented,
+body.is-mock #aiFeedbackContainer,
+body.is-mock #sampleAnswerContainer,
+body.is-mock .stage-timer canvas { display: none !important; }
+
+/* 스테이지 상단: 단계 배지 + 스킵 (겹침 방지) */
+.stage-top { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.9rem; }
+.stage-top .flow-step-indicator { flex: 1; justify-content: flex-start; margin-bottom: 0; flex-wrap: nowrap; min-width: 0; overflow: hidden; }
+.stage-top .flow-step-badge { padding: 0.25rem 0.55rem; white-space: nowrap; }
+.stage-top .flow-sep { width: 10px; flex-shrink: 0; }
