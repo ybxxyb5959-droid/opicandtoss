@@ -85,7 +85,7 @@
     daily: ['target', 'tone-primary'],
     leveltest: ['target', 'tone-indigo']
   };
-  const DAILY_COUNT = 3;
+  const dailyGoal = () => Math.max(1, parseInt((state && state.settings && state.settings.dailyGoal) || 3, 10));
   const MOCK_TOTAL = 15;
   const MOCK_SECONDS = 40 * 60;
   // 질문 유형 (오늘의 3문제 약점 판단용)
@@ -200,6 +200,10 @@
     aiLimit: null,
     aiMember: false,
     followup: null, // 에바 꼬리질문 { en, ko } (답하는 중)
+    stories: readJSON('opic_stories', []),
+    notePane: 'notes',
+    review: null, // { queue:[], idx, flipped }
+    editingStoryId: null,
     mocks: readJSON('opic_mocks', []),
     studioView: localStorage.getItem('opic_studio_view') || 'train', // 'train' | 'exam'
     daily: readJSON('opic_daily', null),
@@ -335,6 +339,7 @@
     sttInterimPreview: $('sttInterimPreview'),
     btnSpeakMyAnswer: $('btnSpeakMyAnswer'),
     btnClearTranscript: $('btnClearTranscript'),
+    btnSkipQuestion: $('btnSkipQuestion'),
 
     metricWords: $('metricWords'),
     metricWpm: $('metricWpm'),
@@ -366,6 +371,26 @@
     noteEnInput: $('noteEnInput'),
     btnCancelNote: $('btnCancelNote'),
     btnSaveNoteConfirm: $('btnSaveNoteConfirm'),
+    noteSeg: $('noteSeg'),
+    reviewDueBadge: $('reviewDueBadge'),
+    notePaneNotes: $('notePaneNotes'),
+    notePaneStories: $('notePaneStories'),
+    notePaneReview: $('notePaneReview'),
+    storyFormBox: $('storyFormBox'),
+    storyTitle: $('storyTitle'),
+    storyWhen: $('storyWhen'),
+    storyWhere: $('storyWhere'),
+    storyWhat: $('storyWhat'),
+    storyFeeling: $('storyFeeling'),
+    storyCats: $('storyCats'),
+    btnCancelStory: $('btnCancelStory'),
+    btnSaveStory: $('btnSaveStory'),
+    storyListContainer: $('storyListContainer'),
+    reviewBox: $('reviewBox'),
+    storyHints: $('storyHints'),
+    studyCalendar: $('studyCalendar'),
+    settingDailyGoal: $('settingDailyGoal'),
+    todayTitle: $('todayTitle'),
 
     historyCountBadge: $('historyCountBadge'),
     takeCountChip: $('takeCountChip'),
@@ -424,6 +449,7 @@
     renderHomeSummary();
     drawIdleWaveform();
     bindEvents();
+    bindEventsTail();
     setupPwaInstall();
     registerServiceWorker();
     loadTakeIds();
@@ -679,7 +705,7 @@
 
   function buildDaily(todayKey) {
     const pool = questionPool();
-    if (pool.length === 0) return { dateKey: todayKey, keys: [], weakCat: null, weakKey: null };
+    if (pool.length === 0) return { dateKey: todayKey, goal: dailyGoal(), keys: [], weakCat: null, weakKey: null };
     const seed = hashSeed(todayKey);
     const weakCat = weakestCategory(pool);
     const picked = [];
@@ -689,16 +715,16 @@
     const rest = pool.filter(p => !picked.includes(p));
     const rotated = rest.slice(seed % Math.max(1, rest.length)).concat(rest.slice(0, seed % Math.max(1, rest.length)));
     for (const p of rotated) {
-      if (picked.length >= DAILY_COUNT) break;
+      if (picked.length >= dailyGoal()) break;
       if (picked.some(x => x.set.id === p.set.id)) continue;
       if (picked.some(x => x.cat === p.cat) && rotated.some(y => !picked.includes(y) && !picked.some(x => x.cat === y.cat || x.set.id === y.set.id))) continue;
       picked.push(p);
     }
     for (const p of rotated) {
-      if (picked.length >= DAILY_COUNT) break;
+      if (picked.length >= dailyGoal()) break;
       if (!picked.includes(p)) picked.push(p);
     }
-    return { dateKey: todayKey, keys: picked.map(p => p.key), weakCat, weakKey: picked[0] ? picked[0].key : null };
+    return { dateKey: todayKey, goal: dailyGoal(), keys: picked.map(p => p.key), weakCat, weakKey: picked[0] ? picked[0].key : null };
   }
 
   function getDailyEntries() {
@@ -706,7 +732,7 @@
     const pool = questionPool();
     const byKey = Object.fromEntries(pool.map(p => [p.key, p]));
     let d = state.daily;
-    const stale = !d || d.dateKey !== todayKey || !Array.isArray(d.keys) || d.keys.length === 0 || d.keys.some(k => !byKey[k]);
+    const stale = !d || d.dateKey !== todayKey || d.goal !== dailyGoal() || !Array.isArray(d.keys) || d.keys.length === 0 || d.keys.some(k => !byKey[k]);
     if (stale) {
       d = buildDaily(todayKey);
       state.daily = d;
@@ -745,8 +771,9 @@
         </span>
         ${e.key === weakKey ? `<span class="li-tag hot">약점 보강</span>` : `<span class="li-tag">${QCAT_LABELS[e.cat]}</span>`}
       </div>`).join('') : `<div class="empty"><strong>서베이에 맞는 문제가 없어요</strong>서베이 주제를 골라주세요.</div>`;
-    els.todayProgress.textContent = `${doneCount}/${entries.length || DAILY_COUNT} 완료`;
-    els.btnStartToday.innerHTML = `${icon('mic', 'ic')}${doneCount === 0 ? '오늘의 3문제 시작' : doneCount >= entries.length ? '오늘 완료! 한 번 더 도전' : `이어서 하기 (${doneCount}/${entries.length})`}`;
+    els.todayProgress.textContent = `${doneCount}/${entries.length || dailyGoal()} 완료`;
+    if (els.todayTitle) els.todayTitle.textContent = `오늘의 ${dailyGoal()}문제`;
+    els.btnStartToday.innerHTML = `${icon('mic', 'ic')}${doneCount === 0 ? `오늘의 ${dailyGoal()}문제 시작` : doneCount >= entries.length ? '오늘 완료! 한 번 더 도전' : `이어서 하기 (${doneCount}/${entries.length})`}`;
     els.btnStartToday.disabled = entries.length === 0;
     const streak = studyStreak();
     els.streakChip.innerHTML = `${icon('flame', 'ic ic-sm')}${streak}일 연속`;
@@ -760,7 +787,7 @@
     const hasTake = state.history.some(x => x.takeId && state.takeIds.has(x.takeId));
     const steps = [
       { ok: state.levelTested, title: '레벨테스트로 내 등급 확인', sub: '질문 3개 · 약 3분', action: 'go-leveltest' },
-      { ok: state.history.length > 0, title: '오늘의 3문제 중 하나 답변하기', sub: '에바가 묻고 → 준비 → 자동 녹음', action: 'start-today' },
+      { ok: state.history.length > 0, title: `오늘의 ${dailyGoal()}문제 중 하나 답변하기`, sub: '에바가 묻고 → 준비 → 자동 녹음', action: 'start-today' },
       { ok: hasTake, title: '내 테이크 다시 들어보기', sub: '기록 탭에서 ▶ 누르기', action: 'go-history' }
     ];
     const allDone = steps.every(s => s.ok);
@@ -784,7 +811,7 @@
     const set = {
       id: 'set_daily',
       topicId: 'daily',
-      title: '오늘의 3문제',
+      title: `오늘의 ${dailyGoal()}문제`,
       type: 'daily',
       questions: entries.map(e => Object.assign({}, e.q, { sourceKey: e.key, sourceSetId: e.set.id }))
     };
@@ -803,7 +830,7 @@
     renderToday();
     renderChecklist();
     els.quickNoteDesc.textContent = `저장 ${state.notebook.length}개`;
-    els.quickPracticeDesc.textContent = `${DATA.comboSets.length}개 세트`;
+    els.quickPracticeDesc.textContent = `${DATA.comboSets.length}개 주제 · ${DATA.comboSets.reduce((n, s) => n + s.questions.length, 0)}문항`;
 
     // 통계
     const h = state.history;
@@ -1255,12 +1282,12 @@
     const targetTextarea = els.liveTranscriptInput;
 
     if (!SpeechRecognition) {
-      showSttNotice('이 브라우저는 실시간 음성 인식이 안 돼요. <strong>녹음은 저장되니</strong> 끝나면 들으면서 아래에 직접 적어보세요. 적으면 바로 분석돼요.');
+      showSttNotice('이 브라우저는 실시간 음성 인식이 안 돼요. <strong>녹음은 저장되지만</strong> 등급 분석은 못 해요. Chrome·Edge·최신 Safari에서 다시 해보세요.');
     } else {
       state.recognition = new SpeechRecognition();
       state.recognition.onerror = (ev) => {
         if (['not-allowed', 'service-not-allowed', 'audio-capture', 'network'].includes(ev.error)) {
-          showSttNotice(`음성 인식이 막혔어요(${ev.error}). <strong>녹음은 계속돼요.</strong> 끝나면 들으면서 아래에 직접 적어보세요.`);
+          showSttNotice(`음성 인식이 막혔어요(${ev.error}). <strong>녹음은 계속돼요.</strong> 브라우저 주소창의 마이크 권한을 "허용"으로 바꿔주세요.`);
         }
       };
       state.recognition.lang = 'en-US';
@@ -1320,10 +1347,11 @@
     }
   }
 
-  function stopAnswering() {
+  function stopAnswering({ discard = false } = {}) {
     if (!state.isRecording) return;
     const finishedMode = state.recordingMode;
     state.isRecording = false;
+    if (discard) pendingTake = null;
     clearInterval(state.recordingTimerId);
 
     if (state.recognition) {
@@ -1361,6 +1389,7 @@
       els.micLiveBadge.classList.remove('live');
       els.sttInterimPreview.textContent = '';
       updateLiveMetrics();
+      if (discard) return;
       savePracticeHistoryItem();
       if (state.studioMode === 'leveltest') {
         recordLevelTestAnswer();
@@ -1370,12 +1399,8 @@
         runAiCoaching();
         setTimeout(() => els.btnRunAiCoach.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
       } else {
-        els.evaStatusPill.textContent = '녹음은 저장됐어요. 들으면서 스크립트를 적으면 분석할 수 있어요';
-        showSttNotice('인식된 문장이 없어요. <strong>녹음을 들으면서</strong> 아래에 영어로 적어보세요. 적으면 "AI 코칭"에서 바로 분석돼요.');
-        setTimeout(() => {
-          els.liveTranscriptInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          els.liveTranscriptInput.focus({ preventScroll: true });
-        }, 200);
+        els.evaStatusPill.textContent = '인식된 문장이 없어요. 녹음은 저장됐어요';
+        showSttNotice('인식된 문장이 없어서 등급을 못 매겼어요. <strong>조금 더 크고 또렷하게</strong> 다시 답변해 보세요. 마이크 권한도 확인해 주세요.');
       }
     }
   }
@@ -2314,6 +2339,7 @@
     state.followup = null;
     const fb = document.getElementById('followupBox');
     if (fb) fb.remove();
+    renderStoryHints();
     applyStudioView();
     setFlowStepBadge('listen');
     setStudioPhase('idle');
@@ -2647,6 +2673,16 @@
     else if (action === 'shadow') { renderSampleAnswer(); showResultTab('sample'); speakEnglishText(getCurrentQuestion().sampleIH); }
     else if (action === 'save-script') els.btnSaveMyScriptToNote.click();
     else if (action === 'ai-retry') requestAiCoach({ force: true });
+    else if (action === 'open-story') openStorySheet(id, btn.dataset.qkey);
+    else if (action === 'edit-story') startEditStory(id);
+    else if (action === 'delete-story') { if (confirm('이 이야기를 삭제할까요?')) deleteStory(id); }
+    else if (action === 'story-draft') requestStoryDraft(id, btn.dataset.qkey, btn);
+    else if (action === 'story-cat') { btn.classList.toggle('selected'); }
+    else if (action === 'use-draft') { closeLevelTestSheet(); els.liveTranscriptInput.value = text; updateLiveMetrics(); els.liveTranscriptInput.scrollIntoView({ behavior: 'smooth', block: 'center' }); showToast('초안을 불러왔어요. 소리 내어 읽고 녹음해 보세요'); }
+    else if (action === 'review-flip') { if (state.review) { state.review.flipped = true; renderReview(); } }
+    else if (action === 'review-grade') reviewGrade(btn.dataset.grade);
+    else if (action === 'review-check') reviewSpeakCheck(btn);
+    else if (action === 'review-start') { state.notePane = 'review'; setNotePane('review'); }
     else if (action === 'followup') requestFollowup(btn);
     else if (action === 'answer-followup') answerFollowup(btn.dataset.en, btn.dataset.ko);
     else if (action === 'load-text') {
@@ -2684,7 +2720,11 @@
 
   function renderNotebook() {
     els.notebookCountBadge.textContent = state.notebook.length;
-    if (els.quickNoteDesc) els.quickNoteDesc.textContent = `저장 ${state.notebook.length}개`;
+    const due = dueNotes().length;
+    if (els.quickNoteDesc) els.quickNoteDesc.textContent = due ? `오늘 복습 ${due}장 · 저장 ${state.notebook.length}개` : `저장 ${state.notebook.length}개`;
+    if (els.reviewDueBadge) els.reviewDueBadge.textContent = due ? String(due) : '';
+    renderStories();
+    if (state.notePane === 'review') renderReview();
     if (state.notebook.length === 0) {
       els.notebookListContainer.innerHTML = `<div class="empty"><strong>저장한 문장이 없어요</strong>연습 중 ☆ 버튼으로 표현을 모아보세요.</div>`;
       return;
@@ -2701,6 +2741,273 @@
         <div class="note-en">${esc(item.en)}</div>
         ${item.ko ? `<div class="note-ko">${esc(item.ko)}</div>` : ''}
       </div>`).join('');
+  }
+
+  // --- 노트 탭 세그먼트 ---
+  function setNotePane(pane) {
+    state.notePane = pane;
+    els.noteSeg.querySelectorAll('[data-nseg]').forEach(b => b.classList.toggle('active', b.dataset.nseg === pane));
+    els.notePaneNotes.hidden = pane !== 'notes';
+    els.notePaneStories.hidden = pane !== 'stories';
+    els.notePaneReview.hidden = pane !== 'review';
+    els.btnAddCustomNote.hidden = pane === 'review';
+    if (pane === 'review') renderReview();
+    if (pane === 'stories') renderStories();
+  }
+
+  // --- 내 이야기 은행 ---
+  const STORY_CATS = ['past', 'describe', 'routine', 'roleplay', 'advanced'];
+
+  function startEditStory(id) {
+    const s = id ? state.stories.find(x => x.id === id) : null;
+    state.editingStoryId = s ? s.id : null;
+    els.storyTitle.value = s ? s.title : '';
+    els.storyWhen.value = s ? s.when : '';
+    els.storyWhere.value = s ? s.where : '';
+    els.storyWhat.value = s ? s.what : '';
+    els.storyFeeling.value = s ? s.feeling : '';
+    const cats = s ? s.cats : ['past'];
+    els.storyCats.innerHTML = STORY_CATS.map(c => `<button type="button" class="filter-chip ${cats.includes(c) ? 'selected' : ''}" data-action="story-cat" data-cat="${c}">${QCAT_LABELS[c]}</button>`).join('');
+    els.storyFormBox.style.display = 'grid';
+    els.storyTitle.focus();
+    els.storyFormBox.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function saveStoryFromForm() {
+    const what = els.storyWhat.value.trim();
+    const title = els.storyTitle.value.trim();
+    if (!title || !what) return showToast('제목과 "무슨 일이 있었는지"는 꼭 적어주세요');
+    const cats = [...els.storyCats.querySelectorAll('.filter-chip.selected')].map(b => b.dataset.cat);
+    const data = { title, when: els.storyWhen.value.trim(), where: els.storyWhere.value.trim(), what, feeling: els.storyFeeling.value.trim(), cats: cats.length ? cats : ['past'] };
+    if (state.editingStoryId) {
+      const s = state.stories.find(x => x.id === state.editingStoryId);
+      if (s) Object.assign(s, data, { updatedAt: new Date().toISOString() });
+    } else {
+      state.stories.unshift(Object.assign({ id: 'story_' + Date.now().toString(36), createdAt: new Date().toISOString(), drafts: {} }, data));
+    }
+    localStorage.setItem('opic_stories', JSON.stringify(state.stories));
+    els.storyFormBox.style.display = 'none';
+    state.editingStoryId = null;
+    renderStories();
+    renderStoryHints();
+    showToast('이야기를 저장했어요');
+  }
+
+  function deleteStory(id) {
+    state.stories = state.stories.filter(s => s.id !== id);
+    localStorage.setItem('opic_stories', JSON.stringify(state.stories));
+    renderStories();
+    renderStoryHints();
+  }
+
+  function renderStories() {
+    if (!els.storyListContainer) return;
+    if (!state.stories.length) {
+      els.storyListContainer.innerHTML = `<div class="empty"><strong>아직 이야기가 없어요</strong>여행·실수·기억에 남는 하루처럼 자주 꺼낼 경험 3개만 적어두면 어떤 질문에도 답이 나와요.<br/><button class="btn btn-primary btn-sm" style="margin-top:0.8rem" data-action="edit-story">${icon('plus', 'ic ic-sm')}첫 이야기 적기</button></div>`;
+      return;
+    }
+    els.storyListContainer.innerHTML = state.stories.map(s => `
+      <div class="note-card story-card">
+        <div class="note-top">
+          <span class="note-cat">${s.cats.map(c => QCAT_LABELS[c]).join(' · ')}</span>
+          <span class="note-actions">
+            <button class="icon-only sm" data-action="edit-story" data-id="${esc(s.id)}" aria-label="수정">${icon('pencil')}</button>
+            <button class="icon-only sm" data-action="delete-story" data-id="${esc(s.id)}" aria-label="삭제">${icon('trash')}</button>
+          </span>
+        </div>
+        <div class="note-en">${esc(s.title)}</div>
+        <div class="note-ko">${esc([s.when, s.where].filter(Boolean).join(' · '))}${s.when || s.where ? ' — ' : ''}${esc(s.what.length > 80 ? s.what.slice(0, 80) + '…' : s.what)}</div>
+        ${Object.keys(s.drafts || {}).length ? `<div class="caption" style="margin-top:0.4rem">AI 초안 ${Object.keys(s.drafts).length}개 저장됨</div>` : ''}
+      </div>`).join('');
+  }
+
+  // 질문에 어울리는 내 이야기 찾기: 유형 일치 + 한국어 키워드 겹침
+  function storiesForQuestion(set, q) {
+    if (!state.stories.length) return [];
+    const cat = questionCategory(q);
+    const topic = DATA.surveyTopics.find(t => setTopicIds(set).includes(t.id));
+    const ctx = ((set.title || '') + ' ' + (topic ? topic.name : '') + ' ' + (q.promptKo || '')).replace(/[^가-힣a-zA-Z ]/g, ' ');
+    const ctxWords = new Set(ctx.split(/\s+/).filter(w => w.length >= 2));
+    return state.stories.map(s => {
+      let score = s.cats.includes(cat) ? 2 : 0;
+      const text = (s.title + ' ' + s.what + ' ' + s.where).replace(/[^가-힣a-zA-Z ]/g, ' ').split(/\s+/);
+      text.forEach(w => { if (w.length >= 2 && [...ctxWords].some(c => c.includes(w) || w.includes(c))) score += 1; });
+      return { s, score };
+    }).filter(x => x.score > 0).sort((p, r) => r.score - p.score).slice(0, 2).map(x => x.s);
+  }
+
+  function renderStoryHints() {
+    if (!els.storyHints) return;
+    if (state.studioMode === 'leveltest' || state.studioMode === 'mock') { els.storyHints.hidden = true; return; }
+    const set = getCurrentSet();
+    const q = getCurrentQuestion();
+    const key = q.sourceKey || questionKeyOf(set, state.currentQIndex);
+    const list = storiesForQuestion(set, q);
+    if (!list.length) {
+      els.storyHints.hidden = state.stories.length > 0;
+      if (!state.stories.length) els.storyHints.innerHTML = `<span class="caption">${icon('book', 'ic ic-sm')}내 경험을 적어두면 여기서 추천해 줘요 · <button class="link-btn" data-go="notebook">내 이야기 적기</button></span>`;
+      return;
+    }
+    els.storyHints.hidden = false;
+    els.storyHints.innerHTML = `<span class="caption">${icon('book', 'ic ic-sm')}쓸 수 있는 내 이야기</span>${list.map(s => `<button class="story-chip" data-action="open-story" data-id="${esc(s.id)}" data-qkey="${esc(key)}">${esc(s.title)}${s.drafts && s.drafts[key] ? ' · 초안 있음' : ''}</button>`).join('')}`;
+  }
+
+  function openStorySheet(id, qkey) {
+    const s = state.stories.find(x => x.id === id);
+    if (!s) return;
+    const draft = s.drafts && qkey ? s.drafts[qkey] : null;
+    openLevelTestSheet(`
+      <div class="sheet-head row-between"><h2 class="h2">${esc(s.title)}</h2><button class="icon-only" data-action="lt-close" aria-label="닫기">${icon('x', 'ic')}</button></div>
+      <div class="card ob-summary">
+        <div class="ob-sum-row"><span class="icon-tile md tone-amber">${icon('clock', 'ic')}</span><span class="ob-sum-body"><span class="ob-sum-k">언제 · 어디서</span><span class="ob-sum-v">${esc([s.when, s.where].filter(Boolean).join(' · ') || '-')}</span></span></div>
+        <div class="ob-sum-row"><span class="icon-tile md tone-primary">${icon('book', 'ic')}</span><span class="ob-sum-body"><span class="ob-sum-k">무슨 일</span><span class="ob-sum-v" style="font-weight:500;line-height:1.55">${esc(s.what)}</span></span></div>
+        <div class="ob-sum-row"><span class="icon-tile md tone-rose">${icon('heart', 'ic')}</span><span class="ob-sum-body"><span class="ob-sum-k">감정 · 결과</span><span class="ob-sum-v">${esc(s.feeling || '-')}</span></span></div>
+      </div>
+      <div id="storyDraftBox">${draft ? storyDraftHtml(draft) : `
+        <div class="result-section card-flat">
+          <div class="result-section-title"><span>이 이야기로 영어 답변 만들기</span></div>
+          <p class="sub" style="margin:0 0 0.8rem">${aiEnabled() ? 'AI가 지금 질문에 맞춰 내 이야기로 답변 초안을 써줘요 (AI 첨삭 횟수 1회 사용).' : 'AI 서버가 연결되면 초안을 만들 수 있어요. 지금은 이야기를 보며 직접 말해보세요.'}</p>
+          ${aiEnabled() ? `<button class="btn btn-primary btn-block" data-action="story-draft" data-id="${esc(s.id)}" data-qkey="${esc(qkey || '')}">${icon('sparkles')}AI 답변 초안 만들기</button>` : ''}
+        </div>`}</div>
+      <button class="btn btn-ghost btn-block" data-action="lt-close" style="margin-top:0.6rem">${icon('mic')}닫고 직접 말하기</button>`);
+  }
+
+  function storyDraftHtml(d) {
+    return `
+      <div class="result-section card-flat">
+        <div class="result-section-title"><span>AI 답변 초안</span>
+          <span class="row-gap">
+            <button class="icon-only sm" data-action="speak" data-text="${esc(d.draftEn)}" aria-label="듣기">${icon('volume')}</button>
+            <button class="icon-only sm" data-action="save" data-cat="내 이야기 답변" data-text="${esc(d.draftEn)}" data-ko="${esc(d.draftKo)}" aria-label="노트 저장">${icon('star')}</button>
+          </span>
+        </div>
+        <p class="script-text">${esc(d.draftEn)}</p>
+        <p class="note-ko" style="margin-top:0.5rem">${esc(d.draftKo)}</p>
+        ${(d.keyPhrases || []).length ? `<div class="expr-grid" style="margin-top:0.7rem">${d.keyPhrases.map(k => `<div class="expr-item"><div class="expr-body"><div class="expr-en">${esc(k.en)}</div><div class="expr-ko">${esc(k.ko)}</div></div><button class="icon-only sm" data-action="save" data-cat="내 이야기 표현" data-text="${esc(k.en)}" data-ko="${esc(k.ko)}" aria-label="노트에 저장">${icon('star')}</button></div>`).join('')}</div>` : ''}
+        <button class="btn btn-primary btn-block" style="margin-top:0.8rem" data-action="use-draft" data-text="${esc(d.draftEn)}">${icon('copy')}내 답변창에 불러와 연습하기</button>
+      </div>`;
+  }
+
+  async function requestStoryDraft(id, qkey, btn) {
+    const s = state.stories.find(x => x.id === id);
+    if (!s) return;
+    const q = getCurrentQuestion();
+    if (btn) { btn.disabled = true; btn.innerHTML = `${icon('sparkles')}초안 쓰는 중…`; }
+    const r = await aiCall('/draft', { promptEn: q.promptEn, story: { title: s.title, when: s.when, where: s.where, what: s.what, feeling: s.feeling }, targetGrade: state.settings.targetGrade || 'IM3' });
+    if (!r.ok) {
+      if (btn) { btn.disabled = false; btn.innerHTML = `${icon('sparkles')}AI 답변 초안 만들기`; }
+      return showToast(aiErrorKo(r.error));
+    }
+    s.drafts = s.drafts || {};
+    s.drafts[qkey || 'general'] = { draftEn: r.data.draftEn, draftKo: r.data.draftKo, keyPhrases: r.data.keyPhrases || [], at: new Date().toISOString() };
+    localStorage.setItem('opic_stories', JSON.stringify(state.stories));
+    const box = document.getElementById('storyDraftBox');
+    if (box) box.innerHTML = storyDraftHtml(s.drafts[qkey || 'general']);
+    renderStoryHints();
+  }
+
+  // --- 노트 복습 (간격 반복) ---
+  function todayStart() { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }
+  function dueNotes() {
+    const t = todayStart().getTime();
+    return state.notebook.filter(n => !n.srs || new Date(n.srs.due).getTime() <= t);
+  }
+
+  function renderReview() {
+    if (!els.reviewBox) return;
+    if (!state.review || state.review.queue.every(id => !state.notebook.find(n => n.id === id))) {
+      state.review = { queue: dueNotes().map(n => n.id), idx: 0, flipped: false, done: 0 };
+    }
+    const rv = state.review;
+    const remaining = rv.queue.slice(rv.idx).map(id => state.notebook.find(n => n.id === id)).filter(Boolean);
+    if (!remaining.length) {
+      const next = state.notebook.filter(n => n.srs).map(n => new Date(n.srs.due)).sort((p, q) => p - q)[0];
+      els.reviewBox.innerHTML = `<div class="empty"><strong>${rv.done ? `오늘 복습 ${rv.done}장 끝!` : '오늘 복습할 카드가 없어요'}</strong>${state.notebook.length ? `다음 복습: ${next ? next.toLocaleDateString('ko-KR') : '-'} · 저장한 문장 ${state.notebook.length}개` : '연습 중 ☆ 버튼으로 표현을 모으면 여기서 카드로 복습해요.'}</div>`;
+      return;
+    }
+    const n = remaining[0];
+    const front = n.ko || '(한국어 뜻 없음) 영어 문장을 떠올려 보세요';
+    els.reviewBox.innerHTML = `
+      <div class="review-progress"><span>${rv.idx + 1} / ${rv.queue.length}</span><span class="caption">${esc(n.category)}</span></div>
+      <div class="review-card ${rv.flipped ? 'flipped' : ''}">
+        <div class="review-face">
+          <span class="caption">한국어를 보고 영어로 말해보세요</span>
+          <p class="review-ko">${esc(front)}</p>
+          ${rv.flipped ? `<div class="review-en-wrap"><p class="review-en">${esc(n.en)}</p>
+            <div class="row-gap" style="justify-content:center;flex-wrap:wrap">
+              <button class="btn btn-tonal btn-sm" data-action="speak" data-text="${esc(n.en)}">${icon('volume', 'ic ic-sm')}듣기</button>
+              <button class="btn btn-tonal btn-sm" data-action="review-check" data-text="${esc(n.en)}">${icon('mic', 'ic ic-sm')}말해서 확인</button>
+            </div>
+            <div id="reviewCheckResult" class="review-check"></div></div>` : ''}
+        </div>
+      </div>
+      ${rv.flipped ? `
+        <div class="next-actions two" style="margin-top:0.8rem">
+          <button class="btn btn-ghost" data-action="review-grade" data-grade="again">${icon('replay')}다시 (내일)</button>
+          <button class="btn btn-primary" data-action="review-grade" data-grade="good">${icon('check')}알아요</button>
+        </div>` : `<button class="btn btn-primary btn-lg btn-block" style="margin-top:0.8rem" data-action="review-flip">${icon('eye')}영어 보기</button>`}`;
+  }
+
+  function reviewGrade(grade) {
+    const rv = state.review;
+    if (!rv) return;
+    const n = state.notebook.find(x => x.id === rv.queue[rv.idx]);
+    if (n) {
+      const prev = n.srs && n.srs.interval ? n.srs.interval : 0;
+      const interval = grade === 'good' ? Math.min(30, prev ? prev * 2 : 2) : 1;
+      const due = todayStart(); due.setDate(due.getDate() + interval);
+      n.srs = { due: due.toISOString(), interval, reps: ((n.srs && n.srs.reps) || 0) + 1, last: new Date().toISOString() };
+      localStorage.setItem('opic_notebook', JSON.stringify(state.notebook));
+    }
+    rv.idx += 1; rv.flipped = false; rv.done += 1;
+    renderReview();
+    renderNotebook();
+  }
+
+  function reviewSpeakCheck(btn) {
+    const target = btn.dataset.text;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const out = document.getElementById('reviewCheckResult');
+    if (!SR) { if (out) out.textContent = '이 브라우저는 음성 인식이 안 돼요. 소리 내어 읽고 스스로 체크해 주세요.'; return; }
+    const rec = new SR();
+    rec.lang = 'en-US'; rec.interimResults = false; rec.maxAlternatives = 1;
+    btn.disabled = true; btn.innerHTML = `${icon('mic', 'ic ic-sm')}듣는 중…`;
+    const norm = s => s.toLowerCase().replace(/[^a-z' ]/g, ' ').split(/\s+/).filter(Boolean);
+    const finish = (said) => {
+      btn.disabled = false; btn.innerHTML = `${icon('mic', 'ic ic-sm')}말해서 확인`;
+      if (!out) return;
+      if (!said) { out.innerHTML = '<span class="caption">인식된 말이 없어요. 다시 눌러 말해보세요.</span>'; return; }
+      const t = norm(target), s = new Set(norm(said));
+      const hit = t.filter(w => s.has(w)).length;
+      const pct = t.length ? Math.round((hit / t.length) * 100) : 0;
+      out.innerHTML = `<span class="review-pct ${pct >= 70 ? 'good' : ''}">${pct}% 일치</span><span class="caption">"${esc(said)}"</span>`;
+    };
+    rec.onresult = (e) => finish(e.results[0][0].transcript);
+    rec.onerror = () => finish('');
+    rec.onend = () => { if (btn.disabled) finish(''); };
+    try { rec.start(); } catch (_) { finish(''); }
+  }
+
+  // --- 학습 달력 (최근 5주) ---
+  function renderStudyCalendar() {
+    if (!els.studyCalendar) return;
+    const counts = {};
+    state.history.forEach(x => { const k = dayKeyFromHistory(x); if (k) counts[k] = (counts[k] || 0) + 1; });
+    const today = todayStart();
+    const start = weekStart(today); start.setDate(start.getDate() - 28);
+    const cells = [];
+    for (let i = 0; i < 35; i++) {
+      const d = new Date(start); d.setDate(start.getDate() + i);
+      const k = dayKeyOf(d);
+      const c = counts[k] || 0;
+      const lvl = c === 0 ? 0 : c <= 2 ? 1 : c <= 4 ? 2 : 3;
+      cells.push(`<span class="cal-day lv${lvl} ${k === dayKeyOf(today) ? 'today' : ''} ${d > today ? 'future' : ''}" title="${d.getMonth() + 1}/${d.getDate()} · ${c}개">${d.getDate()}</span>`);
+    }
+    const activeDays = Object.keys(counts).length;
+    els.studyCalendar.innerHTML = `
+      <div class="row-between" style="margin-bottom:0.5rem"><span class="trend-title" style="margin:0">학습 달력 · 최근 5주</span><span class="caption">연속 ${studyStreak()}일 · 총 ${activeDays}일</span></div>
+      <div class="cal-head">${['월', '화', '수', '목', '금', '토', '일'].map(d => `<span>${d}</span>`).join('')}</div>
+      <div class="cal-grid">${cells.join('')}</div>`;
   }
 
   function savePracticeHistoryItem() {
@@ -2807,6 +3114,7 @@
   function renderHistory() {
     els.historyCountBadge.textContent = state.history.length;
     renderHistoryWeek();
+    renderStudyCalendar();
     renderMockHistory();
     if (els.takeCountChip) {
       els.takeCountChip.innerHTML = `${icon('mic')}녹음 ${state.takeIds.size}개 저장됨 · 최근 ${TAKE_LIMIT}개까지`;
@@ -3063,7 +3371,11 @@
       els.btnToggleKo.classList.toggle('on', state.showKo);
     };
 
-    els.btnNextQuestion.onclick = () => {
+    els.btnNextQuestion.onclick = () => goNextQuestion();
+    els.btnSkipQuestion.onclick = skipQuestion;
+  }
+
+  function goNextQuestion() {
       const set = getCurrentSet();
       if (state.currentQIndex + 1 < set.questions.length) {
         state.currentQIndex += 1;
@@ -3071,7 +3383,7 @@
         finishLevelTest();
         return;
       } else if (state.studioMode === 'daily') {
-        showToast('오늘의 3문제 완료! 수고했어요');
+        showToast(`오늘의 ${dailyGoal()}문제 완료! 수고했어요`);
         navigateTo('home');
         return;
       } else if (state.studioMode === 'mock') {
@@ -3081,14 +3393,25 @@
         state.currentSetIndex = (state.currentSetIndex + 1) % state.activeSets.length;
         state.currentQIndex = 0;
         rememberCurrentSet();
-        showToast(`다음 세트: ${splitSetTitle(getCurrentSet().title).main}`);
+        showToast(`다음 주제: ${splitSetTitle(getCurrentSet().title).main}`);
       }
       resetTranscript();
       renderCurrentQuestion();
       window.scrollTo({ top: 0, behavior: 'smooth' });
       setTimeout(() => playQuestionAndStartPrepFlow(false), 350);
-    };
+  }
 
+  // 모르는 문제 건너뛰기: 녹음·저장 없이 다음 문제로 (모의고사·레벨테스트에서는 '답변 없음'으로 남음)
+  function skipQuestion() {
+    if (state.isRecording) stopAnswering({ discard: true });
+    stopAllAudioAndTimers();
+    if (state.studioMode === 'mock' && state.mock) state.mock.answers[state.currentQIndex] = null;
+    if (state.studioMode === 'leveltest') state.levelTestAnswers[state.currentQIndex] = null;
+    showToast('건너뛰었어요');
+    goNextQuestion();
+  }
+
+  function bindEventsTail() {
     els.liveTranscriptInput.oninput = updateLiveMetrics;
 
     els.btnSpeakMyAnswer.onclick = () => {
@@ -3117,10 +3440,18 @@
 
     // 노트
     els.btnAddCustomNote.onclick = () => {
+      if (state.notePane === 'stories') { startEditStory(null); return; }
+      if (state.notePane === 'review') { setNotePane('notes'); }
       const show = els.customNoteFormBox.style.display === 'none';
       els.customNoteFormBox.style.display = show ? 'grid' : 'none';
       if (show) els.noteEnInput.focus();
     };
+    els.noteSeg.onclick = (e) => {
+      const b = e.target.closest('[data-nseg]');
+      if (b) setNotePane(b.dataset.nseg);
+    };
+    els.btnCancelStory.onclick = () => { els.storyFormBox.style.display = 'none'; state.editingStoryId = null; };
+    els.btnSaveStory.onclick = saveStoryFromForm;
     els.btnCancelNote.onclick = () => { els.customNoteFormBox.style.display = 'none'; };
     els.btnSaveNoteConfirm.onclick = () => {
       const en = els.noteEnInput.value.trim();
@@ -3156,6 +3487,7 @@
       els.settingSpeechRate.value = state.settings.speechRate || '0.95';
       els.settingPrepSeconds.value = state.settings.prepSeconds || '5';
       els.settingInviteCode.value = state.settings.inviteCode || '';
+      els.settingDailyGoal.value = String(state.settings.dailyGoal || 3);
       renderAiQuotaLine();
       refreshQuota();
       renderThemeSeg();
@@ -3182,8 +3514,10 @@
         targetGrade: els.settingTargetGrade.value,
         speechRate: els.settingSpeechRate.value,
         prepSeconds: els.settingPrepSeconds.value,
-        inviteCode: els.settingInviteCode.value.trim().toUpperCase()
+        inviteCode: els.settingInviteCode.value.trim().toUpperCase(),
+        dailyGoal: parseInt(els.settingDailyGoal.value, 10) || 3
       };
+      renderHomeSummary();
       state.aiRemaining = null;
       localStorage.setItem('opic_settings', JSON.stringify(state.settings));
       renderUserTierAndRoadmap();

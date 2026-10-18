@@ -74,6 +74,7 @@
       <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
       <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
       <symbol id="i-monitor" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></symbol>
+      <symbol id="i-skip" viewBox="0 0 24 24"><polygon points="13 19 22 12 13 5 13 19"/><polygon points="2 19 11 12 2 5 2 19"/></symbol>
       <symbol id="i-flame" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></symbol>
       <!-- 서베이 항목 아이콘 -->
       <symbol id="i-briefcase" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><path d="M2 13h20"/></symbol>
@@ -200,7 +201,7 @@
           <div class="today-head">
             <div>
               <p class="eyebrow">오늘 할 일</p>
-              <h2 class="h2">오늘의 3문제</h2>
+              <h2 class="h2" id="todayTitle">오늘의 3문제</h2>
             </div>
             <span id="streakChip" class="chip chip-streak"><svg class="ic ic-sm"><use href="#i-flame"/></svg>0일</span>
           </div>
@@ -255,7 +256,7 @@
       <section id="view-practice" class="screen-view">
         <div class="page-head">
           <h1 class="h1">유형별 연습</h1>
-          <p class="sub">세트를 고르면 바로 에바와 연습할 수 있어요.</p>
+          <p class="sub">주제를 고르면 바로 에바와 연습할 수 있어요.</p>
         </div>
         <div id="practiceFilterChips" class="chip-scroll" role="tablist"></div>
         <label class="switch-row">
@@ -270,7 +271,7 @@
         <div class="page-head row-between">
           <div>
             <h1 class="h1">만능노트</h1>
-            <p class="sub">저장한 문장을 원어민 발음으로 듣고 따라 말해보세요.</p>
+            <p class="sub">표현을 모으고, 내 이야기를 쌓고, 카드로 복습해요.</p>
           </div>
           <div class="row-gap">
             <button id="btnExportNotebook" class="icon-only" aria-label="노트 백업"><svg class="ic"><use href="#i-download"/></svg></button>
@@ -278,6 +279,13 @@
           </div>
         </div>
 
+        <div class="segmented" id="noteSeg" role="tablist">
+          <button class="seg-btn active" data-nseg="notes" role="tab"><svg class="ic ic-sm"><use href="#i-bookmark"/></svg>표현 노트</button>
+          <button class="seg-btn" data-nseg="stories" role="tab"><svg class="ic ic-sm"><use href="#i-book"/></svg>내 이야기</button>
+          <button class="seg-btn" data-nseg="review" role="tab"><svg class="ic ic-sm"><use href="#i-replay"/></svg>복습 <span id="reviewDueBadge" class="nav-count"></span></button>
+        </div>
+
+        <div id="notePaneNotes" class="note-pane">
         <div id="customNoteFormBox" class="card form-card" style="display:none;">
           <div class="form-grid">
             <input id="noteCategoryInput" class="input" placeholder="분류 (예: 장소묘사 만능)" />
@@ -291,6 +299,38 @@
         </div>
 
         <div id="notebookListContainer" class="stack"></div>
+        </div>
+
+        <!-- 내 이야기 은행 -->
+        <div id="notePaneStories" class="note-pane" hidden>
+          <div class="coach-note" style="margin:0 0 0.8rem;">
+            <div class="coach-title"><svg class="ic ic-sm"><use href="#i-bulb"/></svg>내 이야기 은행이란?</div>
+            내 진짜 경험을 한국어로 적어두면, 질문마다 <strong>쓸 수 있는 이야기</strong>를 추천하고 AI가 그 이야기로 영어 답변 초안을 만들어 줘요. 어떤 질문이 나와도 "할 말"이 생겨요.
+          </div>
+          <div id="storyFormBox" class="card form-card" style="display:none;">
+            <input id="storyTitle" class="input" placeholder="제목 (예: 부산 여행에서 소나기 만난 날)" />
+            <div class="form-grid">
+              <input id="storyWhen" class="input" placeholder="언제 (예: 작년 봄)" />
+              <input id="storyWhere" class="input" placeholder="어디서 (예: 해운대)" />
+            </div>
+            <textarea id="storyWhat" class="input textarea" placeholder="무슨 일이 있었나요? 한국어로 편하게 3~5줄"></textarea>
+            <input id="storyFeeling" class="input" placeholder="감정 / 결과 (예: 당황했지만 결국 최고의 추억)" />
+            <div>
+              <span class="field-label">이 이야기를 쓸 수 있는 질문 유형</span>
+              <div id="storyCats" class="chip-wrap"></div>
+            </div>
+            <div class="row-end">
+              <button id="btnCancelStory" class="btn btn-ghost btn-sm">취소</button>
+              <button id="btnSaveStory" class="btn btn-primary btn-sm">저장</button>
+            </div>
+          </div>
+          <div id="storyListContainer" class="stack"></div>
+        </div>
+
+        <!-- 복습 (간격 반복) -->
+        <div id="notePaneReview" class="note-pane" hidden>
+          <div id="reviewBox"></div>
+        </div>
       </section>
 
       <!-- ==================== 성장 기록 ==================== -->
@@ -303,6 +343,7 @@
           <button id="btnClearHistory" class="btn btn-ghost btn-sm">초기화</button>
         </div>
         <div id="historyWeek" class="stat-row week-row"></div>
+        <div id="studyCalendar" class="card calendar-card"></div>
         <div id="mockHistory" class="stack mock-history"></div>
         <div class="row-gap history-meta"><span id="takeCountChip" class="chip chip-soft"><svg class="ic ic-sm"><use href="#i-mic"/></svg>녹음 0개 저장됨</span></div>
         <div id="historyChart" class="card trend-card"></div>
@@ -477,6 +518,7 @@
 
         <!-- 에바 스테이지 -->
         <div class="eva-stage">
+          <button id="btnSkipQuestion" class="skip-pill" aria-label="이 문제 건너뛰기">스킵<svg class="ic ic-sm"><use href="#i-skip"/></svg></button>
           <div class="flow-step-indicator">
             <span id="flowBadgeListen" class="flow-step-badge active">듣기</span>
             <span class="flow-sep"></span>
@@ -519,6 +561,7 @@
               <summary><svg class="ic ic-sm"><use href="#i-bulb"/></svg>공략 팁 보기</summary>
               <div id="questionTipBanner"></div>
             </details>
+            <div id="storyHints" class="story-hints" hidden></div>
           </div>
 
           <label class="switch-row compact on-dark">
@@ -564,7 +607,7 @@
             </div>
           </div>
           <div id="sttNotice" class="stt-notice" hidden></div>
-          <textarea id="liveTranscriptInput" class="input textarea transcript" placeholder="말하면 영어 문장이 실시간으로 입력돼요. 직접 타이핑해도 분석할 수 있어요."></textarea>
+          <textarea id="liveTranscriptInput" class="input textarea transcript readonly" readonly placeholder="말하면 영어 문장이 여기에 실시간으로 적혀요. 타이핑은 없어요, 말로만!"></textarea>
           <div id="sttInterimPreview" class="interim"></div>
 
           <div class="metrics-4grid">
@@ -702,7 +745,7 @@
     <div class="modal-sheet">
       <div class="sheet-grabber"></div>
       <div class="row-between sheet-head">
-        <h2 class="h2">연습 세트 고르기</h2>
+        <h2 class="h2">연습 주제 고르기</h2>
         <button class="icon-only" data-close-sheet aria-label="닫기"><svg class="ic"><use href="#i-x"/></svg></button>
       </div>
       <div id="setSheetList" class="stack sheet-scroll"></div>
@@ -756,6 +799,15 @@
             <option value="4">4초 · 조금 빠르게</option>
             <option value="5">5초 · 시험 표준</option>
             <option value="8">8초 · 생각 정리용</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span class="field-label">오늘 목표 (홈 "오늘의 N문제")</span>
+          <select id="settingDailyGoal" class="input">
+            <option value="3">3문제 · 가볍게 매일</option>
+            <option value="5">5문제 · 시험 한 달 전</option>
+            <option value="7">7문제 · 집중 기간</option>
           </select>
         </label>
 
