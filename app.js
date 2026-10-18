@@ -2,6 +2,12 @@
 (function () {
   const DATA = window.OPIC_DATA;
 
+  // ===== AI 중계 서버 (Cloudflare Worker, worker/ 폴더) =====
+  // 배포 후 나온 주소를 여기 한 곳에만 넣는다. 예: 'https://malmun-coach.xxxx.workers.dev'
+  // 비워 두면 AI 없이 내장 코치만 쓴다. (테스트용: localStorage opic_api_base 로 덮어쓸 수 있음)
+  const COACH_API_BASE = '';
+  const AI_TIMEOUT_MS = 25000;
+
   // 티어(왕초보/초보/중수/고수) 프리셋 정의
   const TIER_PRESETS = {
     beginner0: {
@@ -190,6 +196,10 @@
     levelTested: localStorage.getItem('opic_level_tested') === '1',
     studioMode: 'practice', // 'practice' | 'leveltest' | 'daily' | 'mock'
     mock: null, // 진행 중 모의고사 { id, startedAt, answers:[], timerId }
+    aiRemaining: null, // 오늘 남은 AI 횟수 (서버 응답으로 갱신)
+    aiLimit: null,
+    aiMember: false,
+    followup: null, // 에바 꼬리질문 { en, ko } (답하는 중)
     mocks: readJSON('opic_mocks', []),
     studioView: localStorage.getItem('opic_studio_view') || 'train', // 'train' | 'exam'
     daily: readJSON('opic_daily', null),
@@ -372,6 +382,8 @@
     settingSpeechRate: $('settingSpeechRate'),
     settingPrepSeconds: $('settingPrepSeconds'),
     btnRedoOnboarding: $('btnRedoOnboarding'),
+    settingInviteCode: $('settingInviteCode'),
+    aiQuotaLine: $('aiQuotaLine'),
     saveSettingsBtn: $('saveSettingsBtn'),
 
     // 온보딩
@@ -415,6 +427,7 @@
     setupPwaInstall();
     registerServiceWorker();
     loadTakeIds();
+    refreshQuota();
     els.homeDateLabel.textContent = new Date().toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long' });
     if (!localStorage.getItem('opic_onboarded')) startOnboarding();
   }
@@ -1174,7 +1187,7 @@
     }
 
     const token = ++flowToken;
-    speakEnglishText(q.promptEn, () => {
+    speakEnglishText(state.followup ? state.followup.en : q.promptEn, () => {
       if (token !== flowToken || state.studioPhase !== 'speaking') return;
       const prepTotal = parseInt(state.settings.prepSeconds || '5', 10);
       state.prepSecondsLeft = prepTotal;
@@ -1627,6 +1640,89 @@
     renderHistory();
     renderHomeSummary();
     showToast('기록을 삭제했어요');
+  }
+
+  // --- AI 중계 서버 호출 ---
+  const apiBase = () => (localStorage.getItem('opic_api_base') || COACH_API_BASE || '').replace(/\/$/, '');
+  const aiEnabled = () => !!apiBase();
+
+  function deviceId() {
+    let id = localStorage.getItem('opic_device_id');
+    if (!id) {
+      id = 'd_' + (window.crypto && crypto.randomUUID ? crypto.randomUUID().replace(/-/g, '').slice(0, 20) : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
+      localStorage.setItem('opic_device_id', id);
+    }
+    return id;
+  }
+
+  const AI_ERROR_KO = {
+    quota_exceeded: '오늘 AI 첨삭 횟수를 다 썼어요. 내일 자정에 다시 채워져요. 초대 코드가 있으면 설정에 입력해 주세요.',
+    origin_not_allowed: 'AI 서버가 이 주소를 허용하지 않아요 (서버 설정 확인 필요).',
+    no_api_key: 'AI 서버에 Gemini 키가 아직 없어요.',
+    all_models_failed: 'Gemini가 지금 바쁘거나 한도에 걸렸어요. 잠시 뒤 다시 시도해 주세요.',
+    transcript_too_short: '답변이 너무 짧아서 AI 첨삭을 건너뛰었어요.',
+    timeout: 'AI 응답이 너무 늦어서 멈췄어요. 다시 시도해 주세요.',
+    network: 'AI 서버에 연결하지 못했어요 (인터넷 확인).'
+  };
+  const aiErrorKo = (code) => AI_ERROR_KO[code] || `AI 첨삭을 받지 못했어요 (${code || '알 수 없는 오류'}).`;
+
+  function applyQuota(data) {
+    if (!data) return;
+    if (typeof data.remainingToday === 'number') state.aiRemaining = data.remainingToday;
+    if (typeof data.limit === 'number') state.aiLimit = data.limit;
+    if (typeof data.member === 'boolean') state.aiMember = data.member;
+    renderAiQuotaLine();
+  }
+
+  function renderAiQuotaLine() {
+    if (!els.aiQuotaLine) return;
+    if (!aiEnabled()) {
+      els.aiQuotaLine.textContent = 'AI 서버가 아직 연결되지 않았어요 · 내장 코치만 사용 중';
+      return;
+    }
+    if (state.aiRemaining === null) {
+      els.aiQuotaLine.textContent = 'AI 첨삭 연결됨 · 남은 횟수 확인 중…';
+      return;
+    }
+    const limit = state.aiLimit || (state.aiMember ? 50 : 3);
+    els.aiQuotaLine.innerHTML = `오늘 AI 첨삭 남은 횟수 <strong>${state.aiRemaining}</strong> / ${limit}회 · ${state.aiMember ? '멤버 (초대 코드 인증됨)' : '맛보기 (초대 코드 없음)'}`;
+  }
+
+  // 공통 호출: { ok, data } | { ok:false, error }
+  async function aiCall(path, body) {
+    if (!aiEnabled()) return { ok: false, error: 'disabled' };
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS);
+    try {
+      const payload = Object.assign({ deviceId: deviceId(), inviteCode: (state.settings.inviteCode || '').trim() }, body || {});
+      const res = await fetch(apiBase() + path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: ctrl.signal
+      });
+      const data = await res.json().catch(() => ({}));
+      applyQuota(data);
+      if (!res.ok || data.error) return { ok: false, error: data.error || `http_${res.status}`, detail: data.detail };
+      return { ok: true, data };
+    } catch (e) {
+      return { ok: false, error: e && e.name === 'AbortError' ? 'timeout' : 'network' };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async function refreshQuota() {
+    if (!aiEnabled()) { renderAiQuotaLine(); return; }
+    try {
+      const u = new URL(apiBase() + '/quota');
+      u.searchParams.set('deviceId', deviceId());
+      if ((state.settings.inviteCode || '').trim()) u.searchParams.set('inviteCode', state.settings.inviteCode.trim());
+      const res = await fetch(u.toString());
+      applyQuota(await res.json());
+    } catch (_) {
+      if (els.aiQuotaLine) els.aiQuotaLine.textContent = 'AI 서버에 연결하지 못했어요 (주소·인터넷 확인)';
+    }
   }
 
   // --- 발화 스크립트 정밀 지표 & 등급 도달 계산기 ---
@@ -2142,6 +2238,45 @@
       </div>
       <button class="btn btn-ghost btn-block" data-action="lt-close">${icon('replay')}답변 다시 보기 · 다시 답변하기</button>`);
     els.evaStatusPill.textContent = '진단 완료! 결과 화면을 확인하세요';
+    if (aiEnabled()) requestAiDiagnose(answers, grade);
+  }
+
+  async function requestAiDiagnose(answers, ruleGrade) {
+    const hero = els.ltSheetBody.querySelector('.lt-result-hero');
+    if (!hero) return;
+    hero.insertAdjacentHTML('afterend', `<div id="aiDiagBox" class="result-section ai-box loading"><div class="ai-head"><span class="ai-badge">${icon('sparkles', 'ic ic-sm')}Gemini 진단</span><span class="caption">받는 중…</span></div><div class="ai-skel"></div><div class="ai-skel short"></div></div>`);
+    const r = await aiCall('/diagnose', {
+      answers: answers.map(x => ({ promptEn: (getCurrentSet().questions.find(q => q.badge === x.badge) || {}).promptEn || '', transcript: x.text, durationSec: x.seconds })),
+      targetGrade: state.settings.targetGrade || 'IM3'
+    });
+    const box = document.getElementById('aiDiagBox');
+    if (!box) return;
+    if (!r.ok) {
+      box.className = 'result-section ai-box failed';
+      box.innerHTML = `<div class="ai-head"><span class="ai-badge">${icon('sparkles', 'ic ic-sm')}Gemini 진단</span></div><p class="ai-reason">${esc(aiErrorKo(r.error))} 위 등급은 내장 진단이에요.</p>`;
+      return;
+    }
+    const d = r.data;
+    if (gradeRank(d.grade) >= 0) {
+      state.currentGrade = d.grade;
+      state.userTier = tierForGrade(d.grade);
+      localStorage.setItem('opic_current_grade', d.grade);
+      localStorage.setItem('opic_user_tier', state.userTier);
+      renderUserTierAndRoadmap();
+      const big = els.ltSheetBody.querySelector('.lt-result-grade');
+      if (big) big.textContent = d.grade;
+      const cap = els.ltSheetBody.querySelector('.lt-result-cap');
+      if (cap) cap.textContent = `AI 진단 등급 (내장 진단 ${ruleGrade})`;
+    }
+    box.className = 'result-section ai-box';
+    box.innerHTML = `
+      <div class="ai-head"><span class="ai-badge">${icon('sparkles', 'ic ic-sm')}Gemini 진단</span><span class="grade-pill">${esc(d.grade)}</span></div>
+      <p class="ai-reason">${esc(d.reasonKo)}</p>
+      <div class="diag-cols">
+        <div><div class="caption">잘한 점</div><ul class="lt-notes">${(d.strengthsKo || []).map(t => `<li>${esc(t)}</li>`).join('')}</ul></div>
+        <div><div class="caption">보완할 점</div><ul class="lt-notes">${(d.weaknessesKo || []).map(t => `<li>${esc(t)}</li>`).join('')}</ul></div>
+      </div>
+      ${d.nextStepKo ? `<div class="coach-note" style="margin-top:0.7rem;"><div class="coach-title">${icon('target')}이번 주에 이것만</div>${esc(d.nextStepKo)}</div>` : ''}`;
   }
 
   // --- 콤보 세트 및 질문 렌더링 ---
@@ -2176,6 +2311,9 @@
       : `${topicTile(set.topicId, 'xs')}${esc(splitSetTitle(set.title).main)}`;
     els.studioSetTitleBtn.disabled = state.studioMode !== 'practice';
     els.sttNotice.hidden = true;
+    state.followup = null;
+    const fb = document.getElementById('followupBox');
+    if (fb) fb.remove();
     applyStudioView();
     setFlowStepBadge('listen');
     setStudioPhase('idle');
@@ -2314,7 +2452,8 @@
       </div>`).join('');
 
     els.aiFeedbackContainer.innerHTML = `
-      ${resultHeadHtml(est, '이번 답변 예상 등급', m)}
+      ${resultHeadHtml(est, aiEnabled() ? '내장 코치 예상 등급' : '이번 답변 예상 등급', m)}
+      ${aiEnabled() ? aiBoxHtml('', 'loading') : ''}
       <div class="result-section">
         <div class="result-section-title"><span>이번 답변에서 고칠 점</span></div>
         <ul class="lt-notes">${coachNotes(m, q).map(n => `<li>${n}</li>`).join('')}</ul>
@@ -2341,6 +2480,123 @@
         <div class="expr-grid">${exprHtml}</div>
       </div>` : ''}`;
     showResultTab('coach');
+    if (aiEnabled()) requestAiCoach();
+  }
+
+  // --- Gemini 첨삭 (서버 응답) ---
+  function aiBoxHtml(inner, cls = '') {
+    return `<div id="aiCoachBox" class="result-section ai-box ${cls}">${inner}</div>`;
+  }
+
+  function renderAiCoach(ai) {
+    const corr = (ai.corrections || []).slice(0, 5);
+    return aiBoxHtml(`
+      <div class="ai-head">
+        <span class="ai-badge">${icon('sparkles', 'ic ic-sm')}Gemini 첨삭</span>
+        <span class="grade-pill">${esc(ai.grade)}</span>
+      </div>
+      <p class="ai-reason">${esc(ai.gradeReasonKo)}</p>
+      ${corr.length ? `
+        <div class="result-section-title"><span>이렇게 고쳐보세요</span><span class="caption">${corr.length}곳</span></div>
+        <div class="corr-list">${corr.map(c => `
+          <div class="corr-item">
+            <div class="corr-line"><span class="corr-orig">${esc(c.original)}</span>${icon('arrow', 'ic ic-sm')}<span class="corr-fix">${esc(c.corrected)}</span></div>
+            <div class="corr-why">${esc(c.reasonKo)}</div>
+          </div>`).join('')}</div>` : '<p class="caption ai-ok">문법적으로 크게 고칠 곳이 없어요. 길이와 표현을 늘려볼 차례!</p>'}
+      ${ai.upgradedAnswer ? `
+        <div class="result-section-title" style="margin-top:0.9rem;">
+          <span>내 답변 업그레이드 버전</span>
+          <span class="row-gap">
+            <button class="icon-only sm" data-action="speak" data-text="${esc(ai.upgradedAnswer)}" aria-label="발음 듣기">${icon('volume')}</button>
+            <button class="icon-only sm" data-action="save" data-cat="${esc(getCurrentQuestion().badge)} 업그레이드" data-text="${esc(ai.upgradedAnswer)}" data-ko="${esc(ai.gradeReasonKo)}" aria-label="노트에 저장">${icon('star')}</button>
+          </span>
+        </div>
+        <p class="script-text">${esc(ai.upgradedAnswer)}</p>
+        <div class="next-actions two">
+          <button class="btn btn-tonal" data-action="load-text" data-text="${esc(ai.upgradedAnswer)}">${icon('copy')}내 답변창에 불러와 따라 말하기</button>
+          <button class="btn btn-tonal" data-action="followup">${icon('chat')}에바 꼬리질문 받기</button>
+        </div>` : ''}
+      ${(ai.tipsKo || []).length ? `<div class="result-section-title" style="margin-top:0.9rem;"><span>다음엔 이렇게</span></div><ul class="lt-notes">${ai.tipsKo.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
+      <div class="ai-foot">${state.aiRemaining === null ? '' : `오늘 남은 AI 첨삭 ${state.aiRemaining}회`}</div>`);
+  }
+
+  async function requestAiCoach({ force = false } = {}) {
+    if (!aiEnabled()) return;
+    const text = els.liveTranscriptInput.value.trim();
+    if (text.split(/\s+/).length < 3) return;
+    const q = getCurrentQuestion();
+    const item = state.history.find(x => x.id === state.lastHistoryId);
+    const box = document.getElementById('aiCoachBox');
+    if (!box) return;
+    if (item && item.ai && item.ai.forText === text && !force) {
+      box.outerHTML = renderAiCoach(item.ai);
+      return;
+    }
+    box.className = 'result-section ai-box loading';
+    box.innerHTML = `<div class="ai-head"><span class="ai-badge">${icon('sparkles', 'ic ic-sm')}Gemini 첨삭</span><span class="caption">받는 중…</span></div><div class="ai-skel"></div><div class="ai-skel short"></div>`;
+    const r = await aiCall('/coach', {
+      questionKey: item ? item.questionKey : null,
+      promptEn: state.followup ? state.followup.en : q.promptEn,
+      transcript: text,
+      durationSec: state.recordingSeconds || (item && item.durationSec) || 0,
+      targetGrade: state.settings.targetGrade || 'IM3'
+    });
+    const live = document.getElementById('aiCoachBox');
+    if (!live) return;
+    if (!r.ok) {
+      live.className = 'result-section ai-box failed';
+      live.innerHTML = `<div class="ai-head"><span class="ai-badge">${icon('sparkles', 'ic ic-sm')}Gemini 첨삭</span></div><p class="ai-reason">${esc(aiErrorKo(r.error))}</p><p class="caption">아래는 내장 코치 결과예요.</p>${r.error === 'quota_exceeded' || r.error === 'transcript_too_short' ? '' : `<button class="btn btn-ghost btn-sm" data-action="ai-retry">${icon('replay', 'ic ic-sm')}다시 시도</button>`}`;
+      return;
+    }
+    const ai = Object.assign({}, r.data, { forText: text, at: new Date().toISOString() });
+    if (item) {
+      item.ai = { grade: ai.grade, gradeReasonKo: ai.gradeReasonKo, corrections: ai.corrections, upgradedAnswer: ai.upgradedAnswer, tipsKo: ai.tipsKo, forText: text, at: ai.at };
+      if (gradeRank(ai.grade) >= 0) { item.aiGrade = ai.grade; }
+      localStorage.setItem('opic_history', JSON.stringify(state.history));
+    }
+    if (gradeRank(ai.grade) >= 0) {
+      state.currentGrade = ai.grade;
+      localStorage.setItem('opic_current_grade', ai.grade);
+      renderUserTierAndRoadmap();
+    }
+    live.outerHTML = renderAiCoach(ai);
+  }
+
+  // --- 대화하는 에바: 꼬리질문 ---
+  async function requestFollowup(btn) {
+    if (!aiEnabled()) return showToast('AI 서버가 연결되면 쓸 수 있어요');
+    const text = els.liveTranscriptInput.value.trim();
+    if (!text) return showToast('먼저 답변이 있어야 꼬리질문을 만들 수 있어요');
+    const q = getCurrentQuestion();
+    if (btn) { btn.disabled = true; btn.innerHTML = `${icon('chat')}에바가 생각 중…`; }
+    const r = await aiCall('/followup', { promptEn: q.promptEn, transcript: text });
+    if (btn) { btn.disabled = false; btn.innerHTML = `${icon('chat')}에바 꼬리질문 받기`; }
+    if (!r.ok) return showToast(aiErrorKo(r.error));
+    const box = document.getElementById('aiCoachBox');
+    const html = `
+      <div id="followupBox" class="followup-box">
+        <div class="followup-head">${EVA_ART.replace('eva-art', 'eva-art small')}<div><span class="caption">에바의 꼬리질문</span><p class="followup-en">${esc(r.data.questionEn)}</p><p class="followup-ko">${esc(r.data.questionKo)}</p></div></div>
+        <div class="next-actions two">
+          <button class="btn btn-tonal" data-action="speak" data-text="${esc(r.data.questionEn)}">${icon('volume')}다시 듣기</button>
+          <button class="btn btn-primary" data-action="answer-followup" data-en="${esc(r.data.questionEn)}" data-ko="${esc(r.data.questionKo)}">${icon('mic')}이 질문에 답하기</button>
+        </div>
+      </div>`;
+    const old = document.getElementById('followupBox');
+    if (old) old.remove();
+    (box || els.aiFeedbackContainer).insertAdjacentHTML('afterend', html);
+    speakEnglishText(r.data.questionEn, null, { animateEva: true });
+    setTimeout(() => document.getElementById('followupBox')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
+  }
+
+  function answerFollowup(en, ko) {
+    state.followup = { en, ko };
+    els.qBadgeText.textContent = '에바의 꼬리질문';
+    els.questionTextEn.textContent = en;
+    els.questionTextKo.textContent = ko;
+    resetTranscript();
+    hideResults();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setTimeout(() => playQuestionAndStartPrepFlow(false), 350);
   }
 
   function renderSampleAnswer() {
@@ -2390,6 +2646,15 @@
     else if (action === 'retry') { resetTranscript(); startAnswering('studio'); window.scrollTo({ top: 0, behavior: 'smooth' }); }
     else if (action === 'shadow') { renderSampleAnswer(); showResultTab('sample'); speakEnglishText(getCurrentQuestion().sampleIH); }
     else if (action === 'save-script') els.btnSaveMyScriptToNote.click();
+    else if (action === 'ai-retry') requestAiCoach({ force: true });
+    else if (action === 'followup') requestFollowup(btn);
+    else if (action === 'answer-followup') answerFollowup(btn.dataset.en, btn.dataset.ko);
+    else if (action === 'load-text') {
+      els.liveTranscriptInput.value = text;
+      updateLiveMetrics();
+      els.liveTranscriptInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      showToast('불러왔어요. 소리 내어 따라 읽어보세요');
+    }
   }
 
   // --- 만능노트 & 히스토리 ---
@@ -2456,8 +2721,8 @@
       questionKey: q.sourceKey || questionKeyOf(set, state.currentQIndex),
       setId: q.sourceSetId || set.id,
       qNum: q.qNum,
-      badge: q.badge,
-      promptEn: q.promptEn,
+      badge: state.followup ? `꼬리질문 · ${q.badge}` : q.badge,
+      promptEn: state.followup ? state.followup.en : q.promptEn,
       transcript: text,
       durationSec: seconds,
       wordCount: m.wordCount,
@@ -2890,6 +3155,9 @@
       els.settingTargetGrade.value = state.settings.targetGrade || 'IM3';
       els.settingSpeechRate.value = state.settings.speechRate || '0.95';
       els.settingPrepSeconds.value = state.settings.prepSeconds || '5';
+      els.settingInviteCode.value = state.settings.inviteCode || '';
+      renderAiQuotaLine();
+      refreshQuota();
       renderThemeSeg();
       refreshDropdowns();
       els.settingsModal.classList.add('open');
@@ -2913,8 +3181,10 @@
       state.settings = {
         targetGrade: els.settingTargetGrade.value,
         speechRate: els.settingSpeechRate.value,
-        prepSeconds: els.settingPrepSeconds.value
+        prepSeconds: els.settingPrepSeconds.value,
+        inviteCode: els.settingInviteCode.value.trim().toUpperCase()
       };
+      state.aiRemaining = null;
       localStorage.setItem('opic_settings', JSON.stringify(state.settings));
       renderUserTierAndRoadmap();
       closeDropdown();

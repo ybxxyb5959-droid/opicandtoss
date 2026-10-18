@@ -759,6 +759,15 @@
           </select>
         </label>
 
+        <label class="field">
+          <span class="field-label">초대 코드 (AI 첨삭 하루 50회)</span>
+          <input id="settingInviteCode" class="input" placeholder="친구에게 받은 코드 · 없으면 하루 3회 맛보기" autocomplete="off" autocapitalize="characters" />
+        </label>
+        <div class="field ai-quota-field">
+          <div id="aiQuotaLine" class="ai-quota-line">AI 서버가 아직 연결되지 않았어요 · 내장 코치만 사용 중</div>
+          <p class="caption ai-privacy">AI 첨삭은 Google Gemini 무료 등급을 써요. 보낸 답변 텍스트가 Google 서비스 개선에 쓰일 수 있어요. 이름·연락처 같은 개인정보는 말하지 않는 게 좋아요.</p>
+        </div>
+
         <div class="field">
           <span class="field-label">처음부터 다시</span>
           <button id="btnRedoOnboarding" type="button" class="btn btn-ghost btn-block"><svg class="ic ic-sm"><use href="#i-replay"/></svg>시작 설정 다시 하기</button>

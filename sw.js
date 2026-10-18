@@ -2,7 +2,7 @@
 // - 앱 파일(HTML/JS/CSS/JSON): 네트워크 우선, 실패하면 캐시 → 업데이트가 바로 반영되고 오프라인에서도 열림
 // - 외부 글꼴(CDN): 캐시 우선, 없으면 네트워크. 실패해도 앱은 동작
 // 배포할 때 아래 VERSION만 올리면 옛 캐시가 정리된다.
-const VERSION = 'v3';
+const VERSION = 'v4';
 const CACHE_NAME = `malmun-${VERSION}`;
 const CORE_ASSETS = [
   './',
@@ -41,7 +41,8 @@ self.addEventListener('fetch', (event) => {
 
   if (url.origin === self.location.origin) {
     event.respondWith(networkFirst(req));
-  } else {
+  } else if (/(^|.)(jsdelivr.net|googleapis.com|gstatic.com)$/.test(url.hostname) && !/generativelanguage/.test(url.hostname)) {
+    // 글꼴 CDN만 캐시. AI 중계 서버 등 다른 외부 요청은 그대로 통과
     event.respondWith(cacheFirst(req));
   }
 });
