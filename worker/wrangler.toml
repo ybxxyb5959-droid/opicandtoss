@@ -1,9 +1,9 @@
-# 말문 AI 중계 서버 (Cloudflare Workers)
+# 블루 오픽 AI 중계 서버 (Cloudflare Workers)
 # 배포:  cd worker && npx wrangler deploy
 # 비밀 값(저장소에 넣지 않음):
 #   npx wrangler secret put GEMINI_API_KEY
 #   npx wrangler secret put INVITE_CODES     # 쉼표로 구분, 예: FRIEND01,FRIEND02
-name = "malmun-coach"
+name = "blueopic-coach"
 main = "src/index.js"
 compatibility_date = "2026-10-01"
 

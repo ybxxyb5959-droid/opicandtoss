@@ -1,9 +1,9 @@
-// 말문 (오픽 말하기 연습) - 메인 애플리케이션 로직
+// 블루 오픽 (오픽 말하기 연습) - 메인 애플리케이션 로직
 (function () {
   const DATA = window.OPIC_DATA;
 
   // ===== AI 중계 서버 (Cloudflare Worker, worker/ 폴더) =====
-  // 배포 후 나온 주소를 여기 한 곳에만 넣는다. 예: 'https://malmun-coach.xxxx.workers.dev'
+  // 배포 후 나온 주소를 여기 한 곳에만 넣는다. 예: 'https://blueopic-coach.xxxx.workers.dev'
   // 비워 두면 AI 없이 내장 코치만 쓴다. (테스트용: localStorage opic_api_base 로 덮어쓸 수 있음)
   const COACH_API_BASE = '';
   const AI_TIMEOUT_MS = 25000;
@@ -1456,7 +1456,7 @@
           lastRecordingUrl = URL.createObjectURL(blob);
           els.recordedAudioPlayer.src = lastRecordingUrl;
           els.downloadAudioLink.href = lastRecordingUrl;
-          els.downloadAudioLink.download = `malmun-answer.${audioExt(actualMime)}`;
+          els.downloadAudioLink.download = `blueopic-answer.${audioExt(actualMime)}`;
           els.audioPlaybackBar.style.display = 'flex';
           if (pendingTake) {
             pendingTake.blob = blob;

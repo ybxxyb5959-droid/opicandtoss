@@ -35,7 +35,7 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, () => {
   const url = `http://127.0.0.1:${PORT}`;
   console.log(`\n==================================================`);
-  console.log(` Malmun (OPIc speaking practice) server is running!`);
+  console.log(` Blue OPIc (speaking practice) server is running!`);
   console.log(` URL: ${url} (or http://localhost:${PORT})`);
   console.log(`==================================================\n`);
 

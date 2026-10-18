@@ -1,4 +1,4 @@
-// 말문 추가 문제 데이터 (P1-7 문제 확충)
+// 블루 오픽 추가 문제 데이터 (P1-7 문제 확충)
 // questions-data.js 뒤에 로드되어 window.OPIC_DATA.comboSets에 세트를 추가한다.
 // 형식은 questions-data.js와 동일: { id, topicId, topicIds?, title, type, questions:[{ qNum, badge, promptEn, promptKo, targetSec, tips, sampleIH, keyExpressions }] }
 (function () {
