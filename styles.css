@@ -973,3 +973,30 @@ body.is-leveltest #studioSetTitleBtn .ic { display: none; }
 
 /* 서베이: 준비 중 항목 */
 .survey-chip.soon { opacity: 0.4; cursor: not-allowed; }
+
+/* 레벨테스트 로딩/결과 전체화면 시트 */
+.lt-sheet { position: fixed; inset: 0; z-index: 95; background: var(--bg); overflow-y: auto; animation: fadeIn 0.25s ease; }
+.lt-sheet-body { max-width: var(--col); margin: 0 auto; padding: 1rem var(--gutter) calc(2rem + env(safe-area-inset-bottom)); min-height: 100%; display: flex; flex-direction: column; }
+.lt-sheet.is-loading .lt-sheet-body { justify-content: center; }
+.lt-loading { text-align: center; padding: 2rem 0; }
+.lt-loading .h2 { margin-top: 1.4rem; font-size: 1.3rem; }
+.lt-loading .sub { min-height: 1.5em; }
+.lt-spinner { position: relative; width: 132px; height: 132px; margin: 0 auto; display: grid; place-items: center; }
+.lt-spinner::before { content: ''; position: absolute; inset: 0; border-radius: 50%; border: 5px solid var(--surface-3); }
+.lt-spinner::after { content: ''; position: absolute; inset: 0; border-radius: 50%; border: 5px solid transparent; border-top-color: var(--primary); border-right-color: var(--primary); animation: ltSpin 1s linear infinite; }
+@keyframes ltSpin { to { transform: rotate(360deg); } }
+.lt-dots { display: flex; justify-content: center; gap: 8px; margin-top: 1.2rem; }
+.lt-dots span { width: 8px; height: 8px; border-radius: 50%; background: var(--surface-3); transition: background 0.3s; }
+.lt-dots span.on { background: var(--primary); }
+
+.lt-result-hero { text-align: center; padding: 1.4rem 0 0.6rem; }
+.lt-result-grade { font-size: 3.4rem; font-weight: 900; letter-spacing: -0.04em; line-height: 1.1; margin-top: 0.9rem; color: var(--primary); animation: viewIn 0.4s ease; }
+.lt-result-cap { font-size: 0.86rem; color: var(--text-3); font-weight: 650; }
+.lt-result-track { height: 10px; border-radius: 999px; background: var(--surface-3); overflow: hidden; margin: 1rem auto 0.5rem; max-width: 320px; }
+.lt-result-fill { height: 100%; background: var(--primary); border-radius: 999px; transition: width 0.8s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.lt-result-sub { font-size: 0.82rem; color: var(--text-2); }
+.lt-sheet .coach-note { margin-top: 0.9rem; }
+.lt-sheet .result-section { background: var(--surface); border-radius: var(--r-xl); padding: 1rem; box-shadow: var(--shadow-1); margin-top: 0.75rem; }
+.lt-sheet .sub { margin-top: 0.9rem; }
+.lt-result-actions { margin-top: 1rem; }
+.lt-sheet .btn-block { margin-top: 0.5rem; }

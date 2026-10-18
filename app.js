@@ -254,6 +254,8 @@
 
     // 레벨테스트
     btnStartLevelTest: $('btnStartLevelTest'),
+    ltSheet: $('ltSheet'),
+    ltSheetBody: $('ltSheetBody'),
 
     // 설정(서베이/난이도/티어)
     tierCards: document.querySelectorAll('#tierCardGrid .tier-card'),
@@ -477,7 +479,7 @@
   // --- 화면(뷰) 전환 ---
   function navigateTo(viewId) {
     stopAllAudioAndTimers();
-    if (state.currentView === 'studio' && viewId !== 'studio') leaveLevelTestMode();
+    if (state.currentView === 'studio' && viewId !== 'studio') { closeLevelTestSheet(); leaveLevelTestMode(); }
     if (TAB_VIEWS.includes(state.currentView)) state.returnView = state.currentView;
     state.currentView = viewId;
     const immersive = !TAB_VIEWS.includes(viewId);
@@ -1526,12 +1528,56 @@
     return 'advanced';
   }
 
+  const LT_LOADING_STEPS = ['답변 길이를 재고 있어요', '연결어와 과거 시제를 확인하고 있어요', '등급을 계산하고 있어요'];
+  let ltLoadingTimer = null;
+
+  function openLevelTestSheet(html, { loading = false } = {}) {
+    els.ltSheet.classList.toggle('is-loading', loading);
+    els.ltSheetBody.innerHTML = html;
+    els.ltSheet.hidden = false;
+    els.ltSheet.scrollTop = 0;
+    document.body.classList.add('is-lt-sheet');
+  }
+
+  function closeLevelTestSheet() {
+    clearInterval(ltLoadingTimer);
+    els.ltSheet.hidden = true;
+    document.body.classList.remove('is-lt-sheet');
+  }
+
   function finishLevelTest() {
     const answers = state.levelTestAnswers.filter(Boolean);
     if (answers.length === 0) {
       showToast('답변이 하나도 없어요. 다시 답변해 주세요');
       return;
     }
+    els.evaStatusPill.textContent = '등급을 확인하고 있어요…';
+
+    // 1) 로딩 연출
+    openLevelTestSheet(`
+      <div class="lt-loading">
+        <div class="lt-spinner"><span class="eva-art"><svg viewBox="0 0 104 104"><use href="#i-eva"/></svg></span></div>
+        <h2 class="h2">등급을 확인하고 있어요</h2>
+        <p class="sub" id="ltLoadingStep">${LT_LOADING_STEPS[0]}</p>
+        <div class="lt-dots"><span></span><span></span><span></span></div>
+      </div>`, { loading: true });
+    let i = 0;
+    clearInterval(ltLoadingTimer);
+    ltLoadingTimer = setInterval(() => {
+      i += 1;
+      const el = document.getElementById('ltLoadingStep');
+      if (el && LT_LOADING_STEPS[i]) el.textContent = LT_LOADING_STEPS[i];
+      const dots = document.querySelectorAll('.lt-dots span');
+      dots.forEach((d, k) => d.classList.toggle('on', k <= i));
+      if (i >= LT_LOADING_STEPS.length - 1) {
+        clearInterval(ltLoadingTimer);
+        setTimeout(renderLevelTestResult, 700);
+      }
+    }, 850);
+  }
+
+  function renderLevelTestResult() {
+    const answers = state.levelTestAnswers.filter(Boolean);
     const total = getCurrentSet().questions.length;
 
     // 문항별 등급의 평균 → 과거 시제 문항에서 과거형 동사가 없으면 IM2 이하로 제한
@@ -1580,21 +1626,31 @@
     }).join('');
 
     const p = TIER_PRESETS[tier];
-    els.aiFeedbackContainer.innerHTML = `
-      ${resultHeadHtml(grade, '레벨테스트 진단 등급', agg, 'indigo')}
-      <div class="result-section">
+    const target = state.settings.targetGrade || p.targetGrade;
+    const cur = Math.max(0, gradeRank(grade));
+    const tgt = Math.max(1, gradeRank(target));
+    const pct = Math.min(100, Math.round(((cur + 1) / (tgt + 1)) * 100));
+    openLevelTestSheet(`
+      <div class="lt-result-hero">
+        <span class="chip chip-indigo">레벨테스트 결과</span>
+        <div class="lt-result-grade">${esc(grade)}</div>
+        <p class="lt-result-cap">지금 예상 등급</p>
+        <div class="lt-result-track"><div class="lt-result-fill" style="width:${pct}%"></div></div>
+        <p class="lt-result-sub">목표 <strong>${esc(target)}</strong>까지 ${pct}% · 평균 ${avgWords}단어 · ${avgWpm} WPM · 연결어 ${fillers} · 과거동사 ${pastVerbs}</p>
+      </div>
+      <div class="coach-note">${agg.roadmapToIM3}</div>
+      <div class="result-section card-flat">
         <div class="result-section-title"><span>문항별 결과</span></div>
         <div class="lt-rows">${rows}</div>
       </div>
       ${notes.length ? `<div class="result-section"><div class="result-section-title"><span>이렇게 하면 올라가요</span></div><ul class="lt-notes">${notes.map(n => `<li>${n}</li>`).join('')}</ul></div>` : ''}
       <p class="sub" style="margin-top:0.9rem;">홈 로드맵을 <strong>${p.name} 코스(난이도 ${p.difficulty}단계)</strong>에 맞췄어요. 간이 진단이라 실제 등급과 다를 수 있어요.</p>
-      <div class="result-actions">
-        <button class="btn btn-ghost" data-action="go-home">홈으로</button>
-        <button class="btn btn-primary" data-action="go-setup">서베이 고르기</button>
-      </div>`;
-    showResultTab('coach');
-    els.evaStatusPill.textContent = '진단 완료! 아래에서 결과를 확인하세요';
-    setTimeout(() => els.aiFeedbackContainer.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
+      <div class="result-actions lt-result-actions">
+        <button class="btn btn-ghost btn-lg" data-action="go-home">홈으로</button>
+        <button class="btn btn-primary btn-lg" data-action="go-setup">서베이 고르기</button>
+      </div>
+      <button class="btn btn-ghost btn-block" data-action="lt-close">${icon('replay')}답변 다시 보기 · 다시 답변하기</button>`);
+    els.evaStatusPill.textContent = '진단 완료! 결과 화면을 확인하세요';
   }
 
   // --- 콤보 세트 및 질문 렌더링 ---
@@ -1794,8 +1850,9 @@
     else if (action === 'ob-tier') { ob.tier = id; ob.target = TIER_PRESETS[id].targetGrade; renderObTiers(); }
     else if (action === 'ob-target') { ob.target = id; renderObTargets(); }
     else if (action === 'toggle-ko') btn.classList.toggle('hidden-ko');
-    else if (action === 'go-home') navigateTo('home');
-    else if (action === 'go-setup') navigateTo('setup');
+    else if (action === 'go-home') { closeLevelTestSheet(); navigateTo('home'); }
+    else if (action === 'go-setup') { closeLevelTestSheet(); navigateTo('setup'); }
+    else if (action === 'lt-close') closeLevelTestSheet();
   }
 
   // --- 만능노트 & 히스토리 ---
