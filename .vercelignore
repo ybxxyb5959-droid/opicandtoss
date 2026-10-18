@@ -1,0 +1,7 @@
+server.js
+worker
+docs
+node_modules
+.claude
+.git
+*.bat

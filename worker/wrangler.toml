@@ -14,7 +14,7 @@ id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
 
 [vars]
 # 허용할 앱 주소 (쉼표 구분). GitHub Pages 주소와 로컬 개발 주소만.
-ALLOWED_ORIGINS = "https://ybxxyb5959-droid.github.io,http://localhost:4180,http://localhost:4181,http://127.0.0.1:4180"
+ALLOWED_ORIGINS = "https://blueopic.vercel.app,https://ybxxyb5959-droid.github.io,http://localhost:4180,http://localhost:4181,http://127.0.0.1:4180"
 # 하루 한도
 MEMBER_DAILY_LIMIT = "50"
 GUEST_DAILY_LIMIT = "3"
