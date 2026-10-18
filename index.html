@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#f2f4f6" id="metaThemeColor" />
+  <title>오픽 스튜디오</title>
+  <script>
+    (function () {
+      var t = 'light';
+      try { t = localStorage.getItem('opic_theme') || 'light'; } catch (_) {}
+      if (t === 'system') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- 아이콘 스프라이트 -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></symbol>
+      <symbol id="i-book" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></symbol>
+      <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></symbol>
+      <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></symbol>
+      <symbol id="i-chart" viewBox="0 0 24 24"><line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></symbol>
+      <symbol id="i-sliders" viewBox="0 0 24 24"><line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/></symbol>
+      <symbol id="i-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+      <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+      <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+      <symbol id="i-play" viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3"/></symbol>
+      <symbol id="i-replay" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
+      <symbol id="i-next" viewBox="0 0 24 24"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" x2="19" y1="5" y2="19"/></symbol>
+      <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></symbol>
+      <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></symbol>
+      <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.53 13.53 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></symbol>
+      <symbol id="i-volume" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></symbol>
+      <symbol id="i-star" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></symbol>
+      <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></symbol>
+      <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+      <symbol id="i-list" viewBox="0 0 24 24"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></symbol>
+      <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+      <symbol id="i-copy" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+      <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
+      <symbol id="i-bulb" viewBox="0 0 24 24"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></symbol>
+      <symbol id="i-user" viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
+      <symbol id="i-sofa" viewBox="0 0 24 24"><path d="M20 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v3"/><path d="M2 16a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5a2 2 0 0 0-4 0v1.5a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5V11a2 2 0 0 0-4 0z"/><path d="M4 18v2"/><path d="M20 18v2"/></symbol>
+      <symbol id="i-trees" viewBox="0 0 24 24"><path d="M10 10v.2A3 3 0 0 1 8.9 16H5a3 3 0 0 1-1-5.8V10a3 3 0 0 1 6 0Z"/><path d="M7 16v6"/><path d="M13 19v3"/><path d="M12 19h8.3a1 1 0 0 0 .7-1.7L18 14h.3a1 1 0 0 0 .7-1.7L16 9h.2a1 1 0 0 0 .8-1.7L13 3l-1.4 1.5"/></symbol>
+      <symbol id="i-film" viewBox="0 0 24 24"><path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z"/><path d="m6.2 5.3 3.1 3.9"/><path d="m12.4 3.4 3.1 4"/><path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></symbol>
+      <symbol id="i-headphones" viewBox="0 0 24 24"><path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/></symbol>
+      <symbol id="i-coffee" viewBox="0 0 24 24"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></symbol>
+      <symbol id="i-bag" viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></symbol>
+      <symbol id="i-dumbbell" viewBox="0 0 24 24"><path d="M14.4 14.4 9.6 9.6"/><path d="M18.657 21.485a2 2 0 1 1-2.829-2.828l-1.767 1.768a2 2 0 1 1-2.829-2.829l6.364-6.364a2 2 0 1 1 2.829 2.829l-1.768 1.767a2 2 0 1 1 2.828 2.829z"/><path d="m21.5 21.5-1.4-1.4"/><path d="M3.9 3.9 2.5 2.5"/><path d="M6.404 12.768a2 2 0 1 1-2.829-2.829l1.768-1.767a2 2 0 1 1-2.828-2.829l2.828-2.828a2 2 0 1 1 2.829 2.828l1.767-1.768a2 2 0 1 1 2.829 2.829z"/></symbol>
+      <symbol id="i-plane" viewBox="0 0 24 24"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/></symbol>
+      <symbol id="i-chat" viewBox="0 0 24 24"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/></symbol>
+      <symbol id="i-zap" viewBox="0 0 24 24"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></symbol>
+      <symbol id="i-sprout" viewBox="0 0 24 24"><path d="M7 20h10"/><path d="M10 20c5.5-2.5.8-6.4 3-10"/><path d="M9.5 9.4c1.1.8 1.8 2.2 2.3 3.7-2 .4-3.5.4-4.8-.3-1.2-.6-2.3-1.9-3-4.2 2.8-.5 4.4 0 5.5.8z"/><path d="M14.1 6a7 7 0 0 0-1.1 4c1.9-.1 3.3-.6 4.3-1.4 1-1 1.6-2.300 1.7-4.6-2.7.1-4 1-4.9 2z"/></symbol>
+      <symbol id="i-leaf" viewBox="0 0 24 24"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></symbol>
+      <symbol id="i-trending" viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></symbol>
+      <symbol id="i-crown" viewBox="0 0 24 24"><path d="M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.246a1 1 0 0 1-.956.734H5.81a1 1 0 0 1-.957-.734L2.02 6.02a.5.5 0 0 1 .798-.519l4.276 3.664a1 1 0 0 0 1.516-.294z"/><path d="M5 21h14"/></symbol>
+      <symbol id="i-sig1" viewBox="0 0 24 24"><path d="M4 20v-4"/><path d="M10 20v-8" opacity=".3"/><path d="M16 20V8" opacity=".3"/><path d="M22 20V4" opacity=".3"/></symbol>
+      <symbol id="i-sig2" viewBox="0 0 24 24"><path d="M4 20v-4"/><path d="M10 20v-8"/><path d="M16 20V8"/><path d="M22 20V4" opacity=".3"/></symbol>
+      <symbol id="i-sig3" viewBox="0 0 24 24"><path d="M4 20v-4"/><path d="M10 20v-8"/><path d="M16 20V8"/><path d="M22 20V4"/></symbol>
+      <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+      <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
+      <symbol id="i-monitor" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></symbol>
+      <!-- 면접관 에바 일러스트 -->
+      <symbol id="i-eva" viewBox="0 0 104 104">
+        <path d="M30 50c0-16 10-27 23-27s22 10 22 26c0 10-2 18-5 23H36c-4-5-6-13-6-22z" fill="#3a2621"/>
+        <path d="M14 104c3-22 18-33 38-33s35 11 38 33z" fill="#2b3442"/>
+        <path d="M41 72l11 15 11-15z" fill="#ffffff"/>
+        <rect x="45" y="58" width="14" height="16" rx="6" fill="#f2bfa8"/>
+        <ellipse cx="52" cy="48" rx="15" ry="17" fill="#fbd7c6"/>
+        <path d="M36 47c1-12 8-19 17-19 9 0 15 6 16 16-6-2-12-6-15-11-3 6-10 11-18 14z" fill="#3a2621"/>
+        <circle cx="46" cy="51" r="1.7" fill="#2b2b2b"/>
+        <circle cx="58" cy="51" r="1.7" fill="#2b2b2b"/>
+        <path d="M47.5 58c2.5 2 6.5 2 9 0" fill="none" stroke="#c4786a" stroke-width="1.6" stroke-linecap="round"/>
+        <path d="M34 49a18 18 0 0 1 36 0" fill="none" stroke="#1f2630" stroke-width="3"/>
+        <rect x="31" y="45" width="6" height="11" rx="3" fill="#1f2630"/>
+        <rect x="67" y="45" width="6" height="11" rx="3" fill="#1f2630"/>
+        <path d="M34 55c1 6 5 9 11 9" fill="none" stroke="#1f2630" stroke-width="2.2" stroke-linecap="round"/>
+        <circle cx="46" cy="64" r="2.2" fill="#1f2630"/>
+      </symbol>
+    </defs>
+  </svg>
+
+  <div class="app-shell">
+
+    <!-- 상단 앱 바 (탭 화면에서만 표시) -->
+    <header class="top-app-bar">
+      <button class="app-brand" id="brandHomeLink" aria-label="홈으로">
+        <span class="app-logo-badge">OP</span>
+        <span class="app-brand-name">오픽 스튜디오</span>
+      </button>
+      <div class="top-right-group">
+        <button id="topUserTierBtn" class="chip chip-tier" title="내 레벨·목표 바꾸기">
+          <svg class="ic tier-ic" id="topTierIcon"><use href="#i-leaf"/></svg>
+          <span id="topTierText">초보 · 목표 IM3</span>
+        </button>
+        <button id="pwaInstallBtn" class="icon-only" style="display:none;" aria-label="앱 설치"><svg class="ic"><use href="#i-download"/></svg></button>
+        <button id="openSettingsBtn" class="icon-only" aria-label="설정"><svg class="ic"><use href="#i-sliders"/></svg></button>
+      </div>
+    </header>
+
+    <main class="view-container">
+
+      <!-- ==================== 홈 ==================== -->
+      <section id="view-home" class="screen-view active">
+        <div class="greeting">
+          <p class="eyebrow" id="homeDateLabel">오늘의 연습</p>
+          <h1 class="h1">오늘도 한 문제만<br />소리 내서 말해볼까요?</h1>
+        </div>
+
+        <!-- 등급 로드맵 카드 -->
+        <div class="grade-card">
+          <div class="grade-row">
+            <div class="grade-col">
+              <span class="grade-cap">지금 예상</span>
+              <span id="heroCurrentGrade" class="grade-val">IM1</span>
+            </div>
+            <div class="grade-track-wrap">
+              <div class="roadmap-gauge-track"><div id="heroGaugeFill" class="roadmap-gauge-fill" style="width:55%"></div></div>
+              <span id="heroProgressLabel" class="grade-pct">IM3 도달률 55%</span>
+            </div>
+            <div class="grade-col is-target">
+              <span class="grade-cap">목표</span>
+              <span id="heroTargetGrade" class="grade-val">IM3</span>
+            </div>
+          </div>
+          <div id="heroRoadmapCoach" class="coach-note"></div>
+          <div class="grade-foot">
+            <span id="heroSurveySummary">서베이 10개 · 난이도 4단계</span>
+            <button id="btnGoSurveyStep" class="link-btn">설정 바꾸기 <svg class="ic ic-sm"><use href="#i-right"/></svg></button>
+          </div>
+        </div>
+
+        <!-- 메인 CTA -->
+        <button id="btnQuickStartStudio" class="cta-card">
+          <span class="cta-icon"><svg class="ic"><use href="#i-mic"/></svg></span>
+          <span class="cta-text">
+            <span class="cta-title" id="continueTitle">실전 모의 인터뷰 시작</span>
+            <span class="cta-sub" id="continueSub">내 서베이로 에바가 질문해요 · 듣기 → 준비 → 자동 녹음</span>
+          </span>
+          <svg class="ic cta-arrow"><use href="#i-arrow"/></svg>
+        </button>
+
+        <!-- 빠른 메뉴 -->
+        <div class="quick-grid">
+          <button class="quick-item" data-go="leveltest">
+            <span class="quick-ico tone-indigo"><svg class="ic"><use href="#i-target"/></svg></span>
+            <span class="quick-name">1분 레벨테스트</span>
+            <span class="quick-desc">내 등급 진단</span>
+          </button>
+          <button class="quick-item" data-go="practice">
+            <span class="quick-ico tone-primary"><svg class="ic"><use href="#i-book"/></svg></span>
+            <span class="quick-name">유형별 연습</span>
+            <span class="quick-desc" id="quickPracticeDesc">콤보·롤플레이</span>
+          </button>
+          <button class="quick-item" data-go="setup">
+            <span class="quick-ico tone-emerald"><svg class="ic"><use href="#i-list"/></svg></span>
+            <span class="quick-name">서베이·난이도</span>
+            <span class="quick-desc">시험 설정</span>
+          </button>
+          <button class="quick-item" data-go="notebook">
+            <span class="quick-ico tone-amber"><svg class="ic"><use href="#i-bookmark"/></svg></span>
+            <span class="quick-name">만능노트</span>
+            <span class="quick-desc" id="quickNoteDesc">저장 3개</span>
+          </button>
+        </div>
+
+        <!-- 연습 통계 -->
+        <div class="section-head">
+          <h2 class="h2">나의 연습</h2>
+          <button class="link-btn" data-go="history">전체 기록 <svg class="ic ic-sm"><use href="#i-right"/></svg></button>
+        </div>
+        <div class="stat-row">
+          <div class="stat"><span class="stat-val" id="statTotal">0</span><span class="stat-cap">총 답변</span></div>
+          <div class="stat"><span class="stat-val" id="statToday">0</span><span class="stat-cap">오늘</span></div>
+          <div class="stat"><span class="stat-val" id="statAvgWords">0</span><span class="stat-cap">평균 단어</span></div>
+          <div class="stat"><span class="stat-val" id="statBest">-</span><span class="stat-cap">최고 등급</span></div>
+        </div>
+        <div id="homeRecentList" class="stack"></div>
+      </section>
+
+      <!-- ==================== 유형별 연습 (문제 라이브러리) ==================== -->
+      <section id="view-practice" class="screen-view">
+        <div class="page-head">
+          <h1 class="h1">유형별 연습</h1>
+          <p class="sub">세트를 고르면 바로 에바와 연습할 수 있어요.</p>
+        </div>
+        <div id="practiceFilterChips" class="chip-scroll" role="tablist"></div>
+        <label class="switch-row">
+          <span>내 서베이 주제만 보기</span>
+          <input type="checkbox" id="chkMySurveyOnly" class="switch" />
+        </label>
+        <div id="practiceList" class="stack"></div>
+      </section>
+
+      <!-- ==================== 만능노트 ==================== -->
+      <section id="view-notebook" class="screen-view">
+        <div class="page-head row-between">
+          <div>
+            <h1 class="h1">만능노트</h1>
+            <p class="sub">저장한 문장을 원어민 발음으로 듣고 따라 말해보세요.</p>
+          </div>
+          <div class="row-gap">
+            <button id="btnExportNotebook" class="icon-only" aria-label="노트 백업"><svg class="ic"><use href="#i-download"/></svg></button>
+            <button id="btnAddCustomNote" class="btn btn-primary btn-sm"><svg class="ic ic-sm"><use href="#i-plus"/></svg>추가</button>
+          </div>
+        </div>
+
+        <div id="customNoteFormBox" class="card form-card" style="display:none;">
+          <div class="form-grid">
+            <input id="noteCategoryInput" class="input" placeholder="분류 (예: 장소묘사 만능)" />
+            <input id="noteKoInput" class="input" placeholder="한국어 뜻 또는 메모" />
+          </div>
+          <textarea id="noteEnInput" class="input textarea" placeholder="외울 영어 문장이나 스크립트를 입력하세요."></textarea>
+          <div class="row-end">
+            <button id="btnCancelNote" class="btn btn-ghost btn-sm">취소</button>
+            <button id="btnSaveNoteConfirm" class="btn btn-primary btn-sm">저장</button>
+          </div>
+        </div>
+
+        <div id="notebookListContainer" class="stack"></div>
+      </section>
+
+      <!-- ==================== 성장 기록 ==================== -->
+      <section id="view-history" class="screen-view">
+        <div class="page-head row-between">
+          <div>
+            <h1 class="h1">성장 기록</h1>
+            <p class="sub">답변했던 스크립트와 예상 등급 변화를 확인하세요.</p>
+          </div>
+          <button id="btnClearHistory" class="btn btn-ghost btn-sm">초기화</button>
+        </div>
+        <div id="historyChart" class="card trend-card"></div>
+        <div id="historyListContainer" class="stack"></div>
+      </section>
+
+      <!-- ==================== 설정: 레벨 / 서베이 / 난이도 (전체화면) ==================== -->
+      <section id="view-setup" class="screen-view immersive">
+        <div class="sub-header">
+          <button class="icon-only" data-back aria-label="뒤로"><svg class="ic"><use href="#i-left"/></svg></button>
+          <span class="sub-header-title">시험 설정</span>
+          <span class="sub-header-spacer"></span>
+        </div>
+
+        <div class="setup-block">
+          <div class="step-tag">STEP 1</div>
+          <h2 class="h2">지금 내 스피킹 레벨은?</h2>
+          <p class="sub">레벨에 맞춰 목표 등급·질문 속도·준비 시간이 자동으로 맞춰져요.</p>
+          <div id="tierCardGrid" class="option-list">
+            <button class="option-card tier-card" data-tier="beginner0">
+              <span class="icon-tile md tone-emerald"><svg class="ic"><use href="#i-sprout"/></svg></span>
+              <span class="option-body"><span class="option-title">왕초보</span><span class="option-desc">단어 위주로 겨우 대답해요</span></span>
+              <span class="option-tag">IL → IM2</span>
+            </button>
+            <button class="option-card tier-card" data-tier="beginner">
+              <span class="icon-tile md tone-sky"><svg class="ic"><use href="#i-leaf"/></svg></span>
+              <span class="option-body"><span class="option-title">초보</span><span class="option-desc">짧은 문장은 되지만 40초 넘기기 힘들어요</span></span>
+              <span class="option-tag">IM1 → IM3</span>
+            </button>
+            <button class="option-card tier-card" data-tier="intermediate">
+              <span class="icon-tile md tone-indigo"><svg class="ic"><use href="#i-trending"/></svg></span>
+              <span class="option-body"><span class="option-title">중수</span><span class="option-desc">일상 주제는 OK, 롤플레이·1분 구성이 고민</span></span>
+              <span class="option-tag">IM3 → IH</span>
+            </button>
+            <button class="option-card tier-card" data-tier="advanced">
+              <span class="icon-tile md tone-amber"><svg class="ic"><use href="#i-crown"/></svg></span>
+              <span class="option-body"><span class="option-title">고수</span><span class="option-desc">필러·감정 표현·14~15번으로 AL 도전</span></span>
+              <span class="option-tag">IH → AL</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="setup-block">
+          <div class="row-between">
+            <div>
+              <div class="step-tag">STEP 2</div>
+              <h2 class="h2">Background Survey</h2>
+            </div>
+            <span id="surveyCountBadge" class="chip chip-primary">10개 선택</span>
+          </div>
+          <p class="sub">고른 주제에서 실제 시험처럼 문제가 나와요.</p>
+          <div id="surveyCategoriesContainer"></div>
+        </div>
+
+        <div class="setup-block">
+          <div class="step-tag">STEP 3</div>
+          <h2 class="h2">Self-Assessment 난이도</h2>
+          <p class="sub">난이도에 따라 질문 구성과 권장 답변 시간이 달라져요.</p>
+          <div id="difficultyGrid" class="option-list">
+            <button class="option-card" data-diff="3">
+              <span class="icon-tile md tone-emerald"><svg class="ic"><use href="#i-sig1"/></svg></span>
+              <span class="option-body"><span class="option-title">1~3단계</span><span class="option-desc">짧고 친숙한 일상 묘사, 천천히 질문</span></span>
+              <span class="option-tag">IL ~ IM2</span>
+            </button>
+            <button class="option-card" data-diff="4">
+              <span class="icon-tile md tone-sky"><svg class="ic"><use href="#i-sig2"/></svg></span>
+              <span class="option-body"><span class="option-title">4단계</span><span class="option-desc">3콤보(묘사·루틴·경험)로 IM3 안정권</span></span>
+              <span class="option-tag">IM2 ~ IM3</span>
+            </button>
+            <button class="option-card" data-diff="5">
+              <span class="icon-tile md tone-rose"><svg class="ic"><use href="#i-sig3"/></svg></span>
+              <span class="option-body"><span class="option-title">5~6단계</span><span class="option-desc">롤플레이 11~13번, 고난도 14~15번까지</span></span>
+              <span class="option-tag">IH ~ AL</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="sticky-cta">
+          <button id="btnConfirmSurveyStartInterview" class="btn btn-primary btn-lg btn-block">
+            <svg class="ic"><use href="#i-mic"/></svg>이 설정으로 인터뷰 시작
+          </button>
+        </div>
+      </section>
+
+      <!-- ==================== 1분 레벨테스트 (전체화면) ==================== -->
+      <section id="view-leveltest" class="screen-view immersive">
+        <div class="sub-header">
+          <button class="icon-only" data-back aria-label="뒤로"><svg class="ic"><use href="#i-left"/></svg></button>
+          <span class="sub-header-title">1분 레벨테스트</span>
+          <span class="sub-header-spacer"></span>
+        </div>
+
+        <div class="lt-intro">
+          <span class="chip chip-indigo">AI 실시간 진단</span>
+          <h1 class="h1">내 진짜 오픽 등급은?</h1>
+          <p class="sub">질문을 듣고 30~60초 동안 편하게 영어로 말해보세요. 예상 등급과 목표까지 필요한 것을 바로 알려드려요.</p>
+        </div>
+
+        <div class="question-card">
+          <div class="q-head">
+            <span class="q-badge">진단 질문 · 현재+과거시제</span>
+            <button id="btnListenLevelTestQ" class="btn btn-tonal btn-sm"><svg class="ic ic-sm"><use href="#i-volume"/></svg>듣기</button>
+          </div>
+          <p id="levelTestPromptEn" class="q-en">Tell me about yourself and what you usually do on weekends to relax. Also, tell me about what you did last weekend.</p>
+          <p class="q-ko">본인 소개, 평소 주말에 쉬려고 하는 일, 그리고 지난 주말에 한 일을 말해주세요.</p>
+        </div>
+
+        <div class="lt-control">
+          <div id="levelTestStatusText" class="status-line">듣기를 누르면 5초 준비 후 자동으로 녹음이 시작돼요</div>
+          <div class="row-center">
+            <button id="btnStartLevelTestRec" class="btn btn-primary btn-lg"><svg class="ic"><use href="#i-mic"/></svg>답변 시작</button>
+            <button id="btnStopLevelTestRec" class="btn btn-danger btn-lg" disabled><svg class="ic"><use href="#i-stop"/></svg>완료 · 진단</button>
+          </div>
+        </div>
+
+        <textarea id="levelTestTranscript" class="input textarea transcript" placeholder="말하면 영어 문장이 여기에 실시간으로 입력돼요. 직접 타이핑해도 괜찮아요."></textarea>
+        <div id="levelTestResultBox" class="result-card" style="display:none;"></div>
+      </section>
+
+      <!-- ==================== 실전 인터뷰 스튜디오 (전체화면) ==================== -->
+      <section id="view-studio" class="screen-view immersive">
+        <div class="sub-header">
+          <button class="icon-only" data-back aria-label="뒤로"><svg class="ic"><use href="#i-left"/></svg></button>
+          <button id="studioSetTitleBtn" class="sub-header-title as-btn" title="다른 세트 고르기">
+            <span id="studioSetTitle">세트</span>
+            <svg class="ic ic-sm"><use href="#i-right"/></svg>
+          </button>
+          <span id="studioLevelLabel" class="chip chip-soft">4단계 · IM3</span>
+        </div>
+        <select id="comboSetSelect" class="visually-hidden" tabindex="-1" aria-hidden="true"></select>
+
+        <!-- 문제 진행 표시 -->
+        <div id="questionStepPills" class="q-steps"></div>
+
+        <!-- 에바 스테이지 -->
+        <div class="eva-stage">
+          <div class="flow-step-indicator">
+            <span id="flowBadgeListen" class="flow-step-badge active">듣기</span>
+            <span class="flow-sep"></span>
+            <span id="flowBadgePrep" class="flow-step-badge">준비</span>
+            <span class="flow-sep"></span>
+            <span id="flowBadgeSpeak" class="flow-step-badge">말하기</span>
+          </div>
+
+          <div id="evaAvatar" class="eva-circle">
+            <svg class="prep-ring" viewBox="0 0 120 120" aria-hidden="true">
+              <circle class="prep-ring-bg" cx="60" cy="60" r="54" />
+              <circle id="prepRingFg" class="prep-ring-fg" cx="60" cy="60" r="54" />
+            </svg>
+            <span id="evaCenterContent" class="eva-center"><span class="eva-art"><svg viewBox="0 0 104 104"><use href="#i-eva"/></svg></span></span>
+          </div>
+          <div id="evaStatusPill" class="status-line on-dark">재생 버튼을 누르면 듣기 → 준비 → 녹음이 자동으로 이어져요</div>
+          <div id="replayCountdownText" class="hint-line"></div>
+
+          <div class="stage-timer">
+            <div class="timer-row">
+              <span id="recordingTimer" class="rec-time-big">00:00</span>
+              <span id="targetTimeLabel" class="rec-time-target"> / 01:00</span>
+              <span id="micLiveBadge" class="mic-badge">마이크 대기</span>
+            </div>
+            <div class="time-track"><div id="timeProgressBar" class="time-fill"></div></div>
+            <canvas id="waveformCanvas" width="600" height="40"></canvas>
+          </div>
+
+          <div class="question-box">
+            <div class="q-head">
+              <span id="qBadgeText" class="q-badge on-dark">QUESTION</span>
+              <div class="row-gap">
+                <button id="btnToggleKo" class="mini-btn">해석</button>
+                <button id="btnToggleBlur" class="mini-btn" aria-label="질문 가리기"><svg class="ic ic-sm"><use href="#i-eye"/></svg></button>
+              </div>
+            </div>
+            <p id="questionTextEn" class="q-en on-dark"></p>
+            <p id="questionTextKo" class="q-ko on-dark" hidden></p>
+            <details class="tip-details">
+              <summary><svg class="ic ic-sm"><use href="#i-bulb"/></svg>공략 팁 보기</summary>
+              <div id="questionTipBanner"></div>
+            </details>
+          </div>
+
+          <label class="switch-row compact on-dark">
+            <span>준비시간 끝나면 자동 녹음</span>
+            <input type="checkbox" id="chkAutoStartSpeak" class="switch" checked />
+          </label>
+        </div>
+
+        <!-- 컨트롤 독 (하단 고정) -->
+        <div class="control-dock">
+          <div class="dock-buttons">
+            <button id="btnReplayQuestion" class="dock-side" disabled>
+              <svg class="ic"><use href="#i-replay"/></svg><span>다시 듣기</span>
+            </button>
+            <button id="btnMainAction" class="dock-main" aria-label="질문 듣기">
+              <svg class="ic ic-lg" id="mainActionIcon"><use href="#i-play"/></svg>
+            </button>
+            <button id="btnNextQuestion" class="dock-side">
+              <svg class="ic"><use href="#i-next"/></svg><span>다음 문제</span>
+            </button>
+          </div>
+          <div id="mainActionLabel" class="dock-label">질문 듣기</div>
+          <!-- 기존 호환용 (숨김) -->
+          <button id="btnListenQuestion" hidden></button>
+          <button id="btnStartAnswer" hidden></button>
+          <button id="btnStopAnswer" hidden></button>
+        </div>
+
+        <!-- 막힐 때 쓰는 필러 -->
+        <div class="section-head tight">
+          <h3 class="h3">말문 막힐 때 추임새</h3>
+          <span class="caption">누르면 발음 재생</span>
+        </div>
+        <div id="fillerQuickBar" class="chip-scroll"></div>
+
+        <!-- 실시간 스크립트 -->
+        <div class="card">
+          <div class="row-between">
+            <h3 class="h3">내 답변 스크립트</h3>
+            <div class="row-gap">
+              <button id="btnSpeakMyAnswer" class="icon-only sm" aria-label="내 답변 듣기"><svg class="ic ic-sm"><use href="#i-volume"/></svg></button>
+              <button id="btnClearTranscript" class="icon-only sm" aria-label="비우기"><svg class="ic ic-sm"><use href="#i-trash"/></svg></button>
+            </div>
+          </div>
+          <textarea id="liveTranscriptInput" class="input textarea transcript" placeholder="말하면 영어 문장이 실시간으로 입력돼요. 직접 타이핑해도 분석할 수 있어요."></textarea>
+          <div id="sttInterimPreview" class="interim"></div>
+
+          <div class="metrics-4grid">
+            <div class="metric"><span class="metric-cap">단어</span><span id="metricWords" class="metric-val">0단어</span></div>
+            <div class="metric"><span class="metric-cap">WPM</span><span id="metricWpm" class="metric-val">0</span></div>
+            <div class="metric"><span class="metric-cap">연결어</span><span id="metricFillers" class="metric-val">0회</span></div>
+            <div class="metric is-accent"><span class="metric-cap">예상 등급</span><span id="metricLiveGrade" class="metric-val">-</span></div>
+          </div>
+
+          <div id="audioPlaybackBar" class="playback" style="display:none;">
+            <svg class="ic ic-sm"><use href="#i-volume"/></svg>
+            <audio id="recordedAudioPlayer" controls></audio>
+            <a id="downloadAudioLink" class="icon-only sm" download="opic-answer.webm" aria-label="녹음 저장"><svg class="ic ic-sm"><use href="#i-download"/></svg></a>
+          </div>
+        </div>
+
+        <!-- 결과 탭 -->
+        <div class="segmented" role="tablist">
+          <button id="btnRunAiCoach" class="seg-btn" role="tab"><svg class="ic ic-sm"><use href="#i-sparkles"/></svg>AI 코칭</button>
+          <button id="btnShowSampleAnswer" class="seg-btn" role="tab"><svg class="ic ic-sm"><use href="#i-book"/></svg>모범답안</button>
+          <button id="btnSaveMyScriptToNote" class="seg-btn"><svg class="ic ic-sm"><use href="#i-star"/></svg>노트 저장</button>
+        </div>
+        <div id="aiFeedbackContainer" class="result-card" style="display:none;"></div>
+        <div id="sampleAnswerContainer" class="result-card is-sample" style="display:none;"></div>
+      </section>
+
+    </main>
+
+    <!-- 하단 탭 바 -->
+    <nav class="bottom-nav" aria-label="하단 메뉴">
+      <div class="bottom-nav-inner">
+        <button class="bnav-item active" data-view="home">
+          <svg class="ic"><use href="#i-home"/></svg><span class="bnav-label">홈</span>
+        </button>
+        <button class="bnav-item" data-view="practice">
+          <svg class="ic"><use href="#i-book"/></svg><span class="bnav-label">연습</span>
+        </button>
+        <button class="bnav-fab" id="bnavFab" aria-label="모의 인터뷰 시작">
+          <svg class="ic"><use href="#i-mic"/></svg>
+        </button>
+        <button class="bnav-item" data-view="notebook">
+          <svg class="ic"><use href="#i-bookmark"/></svg><span class="bnav-label">노트 <span id="notebookCountBadge" class="nav-count">3</span></span>
+        </button>
+        <button class="bnav-item" data-view="history">
+          <svg class="ic"><use href="#i-chart"/></svg><span class="bnav-label">기록 <span id="historyCountBadge" class="nav-count">0</span></span>
+        </button>
+      </div>
+    </nav>
+  </div>
+
+  <!-- 세트 선택 바텀시트 -->
+  <div id="setSheet" class="modal-overlay">
+    <div class="modal-sheet">
+      <div class="sheet-grabber"></div>
+      <div class="row-between sheet-head">
+        <h2 class="h2">연습 세트 고르기</h2>
+        <button class="icon-only" data-close-sheet aria-label="닫기"><svg class="ic"><use href="#i-x"/></svg></button>
+      </div>
+      <div id="setSheetList" class="stack sheet-scroll"></div>
+    </div>
+  </div>
+
+  <!-- 설정 바텀시트 -->
+  <div id="settingsModal" class="modal-overlay">
+    <div class="modal-sheet">
+      <div class="sheet-grabber"></div>
+      <div class="row-between sheet-head">
+        <h2 class="h2">코치 · 음성 설정</h2>
+        <button id="closeSettingsBtn" class="icon-only" aria-label="닫기"><svg class="ic"><use href="#i-x"/></svg></button>
+      </div>
+
+      <div class="sheet-scroll">
+        <div class="field">
+          <span class="field-label">화면 테마</span>
+          <div class="seg-inline" id="themeSeg">
+            <button type="button" data-theme-val="light"><svg class="ic ic-sm"><use href="#i-sun"/></svg>라이트</button>
+            <button type="button" data-theme-val="dark"><svg class="ic ic-sm"><use href="#i-moon"/></svg>다크</button>
+            <button type="button" data-theme-val="system"><svg class="ic ic-sm"><use href="#i-monitor"/></svg>시스템</button>
+          </div>
+        </div>
+
+        <label class="field">
+          <span class="field-label">목표 등급</span>
+          <select id="settingTargetGrade" class="input">
+            <option value="IM2">IM2 · 왕초보 탈출</option>
+            <option value="IM3">IM3 · 기업 기본 가점 안정권</option>
+            <option value="IH">IH · 가장 많이 목표로 하는 고득점</option>
+            <option value="AL">AL · 최고 등급</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span class="field-label">에바 말하기 속도</span>
+          <select id="settingSpeechRate" class="input">
+            <option value="0.88">천천히 · 0.88x · 초보 추천</option>
+            <option value="0.95">조금 천천히 · 0.95x</option>
+            <option value="1.0">실전 속도 · 1.0x · 시험과 동일</option>
+            <option value="1.08">조금 빠르게 · 1.08x</option>
+            <option value="1.12">빠르게 · 1.12x · 고득점 훈련</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span class="field-label">질문 후 준비 시간</span>
+          <select id="settingPrepSeconds" class="input">
+            <option value="3">3초 · 순발력 훈련</option>
+            <option value="4">4초 · 조금 빠르게</option>
+            <option value="5">5초 · 시험 표준</option>
+            <option value="8">8초 · 생각 정리용</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span class="field-label">AI 첨삭 엔진</span>
+          <select id="settingAiProvider" class="input">
+            <option value="builtin">내장 오픽 코치 · 무료 · 키 없이 바로 분석</option>
+            <option value="gemini">Google Gemini · API 키 필요</option>
+            <option value="openai">OpenAI · API 키 필요</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span class="field-label">API Key (선택)</span>
+          <input id="settingApiKey" type="password" class="input" placeholder="없어도 진단·코칭은 그대로 작동해요" />
+        </label>
+      </div>
+
+      <button id="saveSettingsBtn" class="btn btn-primary btn-lg btn-block">저장하기</button>
+    </div>
+  </div>
+
+  <div id="toastMsg" class="toast-popup" role="status" aria-live="polite"></div>
+
+  <script src="questions-data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

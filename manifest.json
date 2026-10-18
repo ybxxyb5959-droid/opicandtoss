@@ -1,0 +1,22 @@
+{
+  "name": "OPIc AI Studio - 나만의 실시간 오픽 독학 앱",
+  "short_name": "OPIc Studio",
+  "description": "실시간 음성 인식(Web Speech API), 에바(Eva) 실전 타이머, IH/AL 맞춤 AI 첨삭 및 만능 스크립트 노트",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#2357e8",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%232357e8'/><text x='50%' y='58%' dominant-baseline='middle' text-anchor='middle' font-size='48' font-family='sans-serif' font-weight='bold' fill='white'>OP</text></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%232357e8'/><text x='50%' y='58%' dominant-baseline='middle' text-anchor='middle' font-size='48' font-family='sans-serif' font-weight='bold' fill='white'>OP</text></svg>",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}
