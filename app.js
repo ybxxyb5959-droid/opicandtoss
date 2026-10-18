@@ -5,7 +5,7 @@
   // ===== AI 중계 서버 (Cloudflare Worker, worker/ 폴더) =====
   // 배포 후 나온 주소를 여기 한 곳에만 넣는다. 예: 'https://blueopic-coach.xxxx.workers.dev'
   // 비워 두면 AI 없이 내장 코치만 쓴다. (테스트용: localStorage opic_api_base 로 덮어쓸 수 있음)
-  const COACH_API_BASE = '';
+  const COACH_API_BASE = 'https://blueopic-coach.blueopic.workers.dev';
   const AI_TIMEOUT_MS = 25000;
 
   // 티어(왕초보/초보/중수/고수) 프리셋 정의

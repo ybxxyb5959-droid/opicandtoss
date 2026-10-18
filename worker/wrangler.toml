@@ -1,22 +1,22 @@
-# 블루 오픽 AI 중계 서버 (Cloudflare Workers)
-# 배포:  cd worker && npx wrangler deploy
-# 비밀 값(저장소에 넣지 않음):
+﻿# 釉붾（ ?ㅽ뵿 AI 以묎퀎 ?쒕쾭 (Cloudflare Workers)
+# 諛고룷:  cd worker && npx wrangler deploy
+# 鍮꾨? 媛???μ냼???ｌ? ?딆쓬):
 #   npx wrangler secret put GEMINI_API_KEY
-#   npx wrangler secret put INVITE_CODES     # 쉼표로 구분, 예: FRIEND01,FRIEND02
+#   npx wrangler secret put INVITE_CODES     # ?쇳몴濡?援щ텇, ?? FRIEND01,FRIEND02
 name = "blueopic-coach"
 main = "src/index.js"
 compatibility_date = "2026-10-01"
 
-# 하루 사용 횟수를 세는 KV 저장소. 아래 id는 `npx wrangler kv namespace create QUOTA` 결과로 바꿔 넣는다.
+# ?섎（ ?ъ슜 ?잛닔瑜??몃뒗 KV ??μ냼. ?꾨옒 id??`npx wrangler kv namespace create QUOTA` 寃곌낵濡?諛붽퓭 ?ｋ뒗??
 [[kv_namespaces]]
 binding = "QUOTA"
-id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+id = "c887f327015746b48e5d1ac7a27932ed"
 
 [vars]
-# 허용할 앱 주소 (쉼표 구분). GitHub Pages 주소와 로컬 개발 주소만.
+# ?덉슜????二쇱냼 (?쇳몴 援щ텇). GitHub Pages 二쇱냼? 濡쒖뺄 媛쒕컻 二쇱냼留?
 ALLOWED_ORIGINS = "https://blueopic.vercel.app,https://ybxxyb5959-droid.github.io,http://localhost:4180,http://localhost:4181,http://127.0.0.1:4180"
-# 하루 한도
+# ?섎（ ?쒕룄
 MEMBER_DAILY_LIMIT = "50"
 GUEST_DAILY_LIMIT = "3"
-# 모델 순서 (앞에서부터 시도, 429/5xx면 다음)
+# 紐⑤뜽 ?쒖꽌 (?욎뿉?쒕????쒕룄, 429/5xx硫??ㅼ쓬)
 MODELS = "gemini-3.5-flash-lite,gemini-3.1-flash-lite"
