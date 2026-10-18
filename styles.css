@@ -1000,3 +1000,49 @@ body.is-leveltest #studioSetTitleBtn .ic { display: none; }
 .lt-sheet .sub { margin-top: 0.9rem; }
 .lt-result-actions { margin-top: 1rem; }
 .lt-sheet .btn-block { margin-top: 0.5rem; }
+
+/* ==================== 홈: 오늘 할 일 / 시작 3단계 ==================== */
+.today-card { margin-top: 0.9rem; background: var(--surface); border-radius: var(--r-xl); padding: 1.1rem; box-shadow: var(--shadow-1); }
+.today-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.6rem; margin-bottom: 0.8rem; }
+.today-head .eyebrow { margin-bottom: 0.15rem; }
+.chip-streak { background: var(--surface-3); color: var(--text-3); height: 30px; font-size: 0.78rem; }
+.chip-streak.on { background: var(--amber-soft); color: var(--amber); }
+.today-list { display: grid; gap: 0.45rem; margin-bottom: 0.9rem; }
+.today-row { display: flex; align-items: center; gap: 0.7rem; padding: 0.65rem 0.75rem; border-radius: var(--r-md); background: var(--surface-2); }
+.today-row.done { opacity: 0.6; }
+.today-row.done .li-title { text-decoration: line-through; }
+.today-num { width: 28px; height: 28px; border-radius: 9px; background: var(--primary-soft); color: var(--primary); display: grid; place-items: center; font-size: 0.82rem; font-weight: 800; flex-shrink: 0; }
+.today-row.done .today-num, .checklist-row.done .today-num { background: var(--emerald-soft); color: var(--emerald); }
+.today-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 0.7rem; font-size: 0.8rem; color: var(--text-3); font-weight: 600; }
+.today-foot .link-btn { color: var(--primary); }
+
+.checklist-card { margin: 0.9rem 0 0; padding: 0.9rem 1rem; display: grid; gap: 0.35rem; }
+.checklist-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.2rem; }
+.checklist-head .eyebrow { margin: 0; }
+.checklist-row { display: flex; align-items: center; gap: 0.7rem; width: 100%; text-align: left; padding: 0.55rem 0.3rem; border-radius: var(--r-sm); }
+.checklist-row:hover:not(:disabled) { background: var(--surface-2); }
+.checklist-row.done { opacity: 0.55; cursor: default; }
+.checklist-row.done .li-title { text-decoration: line-through; }
+
+.history-card.compact { padding: 0.75rem 0.9rem; }
+
+/* 결과: 다음 행동 */
+.next-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem; margin-top: 0.9rem; }
+.next-actions .btn { min-height: 56px; padding: 0.4rem 0.3rem; font-size: 0.78rem; flex-direction: column; gap: 0.2rem; border-radius: var(--r-md); }
+.next-actions .btn .ic { width: 18px; height: 18px; }
+
+/* 스튜디오: 훈련/시험 모드 토글 */
+.mode-seg { display: inline-flex; gap: 2px; background: var(--surface-3); padding: 3px; border-radius: 999px; flex-shrink: 0; }
+.mode-seg button { height: 28px; padding: 0 0.7rem; border-radius: 999px; font-size: 0.76rem; font-weight: 750; color: var(--text-3); }
+.mode-seg button.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow-1); }
+body.is-exam-view .section-head.tight,
+body.is-exam-view #fillerQuickBar,
+body.is-exam-view .metrics-4grid,
+body.is-exam-view .tip-details,
+body.is-exam-view #btnToggleKo,
+body.is-exam-view .switch-row.on-dark { display: none; }
+
+/* 음성 인식 안내 */
+.stt-notice { display: flex; align-items: flex-start; gap: 0.45rem; margin-top: 0.6rem; padding: 0.7rem 0.8rem; border-radius: var(--r-md); background: var(--amber-soft); color: var(--text-2); font-size: 0.82rem; line-height: 1.55; }
+.stt-notice .ic { color: var(--amber); flex-shrink: 0; margin-top: 0.1rem; }
+.stt-notice strong { color: var(--text); }

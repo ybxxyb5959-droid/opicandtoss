@@ -75,8 +75,13 @@
     workout: ['dumbbell', 'tone-emerald'],
     travel: ['plane', 'tone-sky'],
     roleplay: ['chat', 'tone-primary'],
-    unexpected: ['zap', 'tone-violet']
+    unexpected: ['zap', 'tone-violet'],
+    daily: ['target', 'tone-primary'],
+    leveltest: ['target', 'tone-indigo']
   };
+  const DAILY_COUNT = 3;
+  // 질문 유형 (오늘의 3문제 약점 판단용)
+  const QCAT_LABELS = { intro: '자기소개', describe: '묘사', routine: '루틴·습관', past: '과거 경험', roleplay: '롤플레이', advanced: '고난도 14~15' };
   // 서베이와 관계없이 항상 출제되는 유형(세트의 topicId 기준)
   const ALWAYS_TOPICS = ['intro', 'roleplay', 'unexpected'];
   // 예전 버전 서베이 ID → 실전 서베이 ID
@@ -180,7 +185,10 @@
     // 로컬 저장 설정
     selectedSurveyIds: normalizeSurveyIds(readJSON('opic_survey_ids', null)),
     levelTested: localStorage.getItem('opic_level_tested') === '1',
-    studioMode: 'practice', // 'practice' | 'leveltest'
+    studioMode: 'practice', // 'practice' | 'leveltest' | 'daily'
+    studioView: localStorage.getItem('opic_studio_view') || 'train', // 'train' | 'exam'
+    daily: readJSON('opic_daily', null),
+    lastHistoryId: null,
     levelTestAnswers: [],
     lastSetId: localStorage.getItem('opic_last_set') || null,
     settings: readJSON('opic_settings', null) || {
@@ -236,9 +244,12 @@
     gradeCard: $('gradeCard'),
     heroRoadmapCoach: $('heroRoadmapCoach'),
     btnGoSurveyStep: $('btnGoSurveyStep'),
-    btnQuickStartStudio: $('btnQuickStartStudio'),
-    continueTitle: $('continueTitle'),
-    continueSub: $('continueSub'),
+    homeChecklist: $('homeChecklist'),
+    todayList: $('todayList'),
+    todayProgress: $('todayProgress'),
+    btnStartToday: $('btnStartToday'),
+    btnContinueLast: $('btnContinueLast'),
+    streakChip: $('streakChip'),
     quickNoteDesc: $('quickNoteDesc'),
     quickPracticeDesc: $('quickPracticeDesc'),
     statTotal: $('statTotal'),
@@ -267,7 +278,8 @@
     // 스튜디오
     studioSetTitle: $('studioSetTitle'),
     studioSetTitleBtn: $('studioSetTitleBtn'),
-    studioLevelLabel: $('studioLevelLabel'),
+    studioModeSeg: $('studioModeSeg'),
+    sttNotice: $('sttNotice'),
     comboSetSelect: $('comboSetSelect'),
     questionStepPills: $('questionStepPills'),
     flowBadgeListen: $('flowBadgeListen'),
@@ -509,7 +521,7 @@
   }
 
   function rememberCurrentSet() {
-    if (state.studioMode === 'leveltest') return;
+    if (state.studioMode !== 'practice') return;
     state.lastSetId = getCurrentSet().id;
     localStorage.setItem('opic_last_set', state.lastSetId);
     renderHomeSummary();
@@ -576,23 +588,190 @@
       card.classList.toggle('selected', card.dataset.tier === state.userTier);
     });
 
-    if (els.studioLevelLabel) {
-      els.studioLevelLabel.textContent = `${state.difficulty}단계 · ${target}`;
+  }
+
+  // 질문 유형 판별: 시험 번호 → 배지 문구 순
+  function questionCategory(q) {
+    if (q.qNum === 1 || /자기소개/.test(q.badge)) return 'intro';
+    if (q.qNum >= 14 || /고난도|비교|이슈|변화/.test(q.badge)) return 'advanced';
+    if ((q.qNum >= 11 && q.qNum <= 13) || /롤플레이|대안|상황|문제 해결/.test(q.badge)) return 'roleplay';
+    if (/경험|과거|사건|기억|에피소드|실패/.test(q.badge)) return 'past';
+    if (/루틴|습관|평소|활동|방식/.test(q.badge)) return 'routine';
+    return 'describe';
+  }
+
+  // 내 서베이에 해당하는 모든 질문 (자기소개 제외)
+  function questionPool() {
+    const pool = [];
+    DATA.comboSets.filter(setMatchesSurvey).forEach(set => {
+      set.questions.forEach((q, idx) => {
+        if (q.qNum === 1) return;
+        pool.push({ set, q, idx, key: questionKeyOf(set, idx), cat: questionCategory(q) });
+      });
+    });
+    return pool;
+  }
+
+  function dayKeyOf(date) {
+    return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+  }
+  // 기록의 dateKey("2026. 10. 18.") → "2026-10-18"
+  function dayKeyFromHistory(hItem) {
+    if (hItem.createdAt) return dayKeyOf(new Date(hItem.createdAt));
+    const n = String(hItem.dateKey || hItem.date || '').match(/\d+/g);
+    return n && n.length >= 3 ? `${n[0]}-${+n[1]}-${+n[2]}` : '';
+  }
+
+  function hashSeed(str) {
+    let x = 0;
+    for (let i = 0; i < str.length; i++) x = (x * 31 + str.charCodeAt(i)) >>> 0;
+    return x;
+  }
+
+  // 최근 기록에서 가장 약한 유형 (2회 이상 답변한 유형 중 평균 등급 최저). 없으면 과거 경험
+  function weakestCategory(pool) {
+    const byKey = Object.fromEntries(pool.map(p => [p.key, p.cat]));
+    const acc = {};
+    state.history.slice(0, 40).forEach(x => {
+      const cat = byKey[x.questionKey];
+      const r = gradeRank(x.estGrade);
+      if (!cat || r < 0) return;
+      (acc[cat] = acc[cat] || []).push(r);
+    });
+    let best = null;
+    Object.entries(acc).forEach(([cat, rs]) => {
+      if (rs.length < 2) return;
+      const avg = rs.reduce((s, r) => s + r, 0) / rs.length;
+      if (!best || avg < best.avg) best = { cat, avg };
+    });
+    return best ? best.cat : 'past';
+  }
+
+  function buildDaily(todayKey) {
+    const pool = questionPool();
+    if (pool.length === 0) return { dateKey: todayKey, keys: [], weakCat: null, weakKey: null };
+    const seed = hashSeed(todayKey);
+    const weakCat = weakestCategory(pool);
+    const picked = [];
+    const weakList = pool.filter(p => p.cat === weakCat);
+    if (weakList.length) picked.push(weakList[seed % weakList.length]);
+    // 나머지: 다른 세트·다른 유형 우선, 날짜로 회전
+    const rest = pool.filter(p => !picked.includes(p));
+    const rotated = rest.slice(seed % Math.max(1, rest.length)).concat(rest.slice(0, seed % Math.max(1, rest.length)));
+    for (const p of rotated) {
+      if (picked.length >= DAILY_COUNT) break;
+      if (picked.some(x => x.set.id === p.set.id)) continue;
+      if (picked.some(x => x.cat === p.cat) && rotated.some(y => !picked.includes(y) && !picked.some(x => x.cat === y.cat || x.set.id === y.set.id))) continue;
+      picked.push(p);
+    }
+    for (const p of rotated) {
+      if (picked.length >= DAILY_COUNT) break;
+      if (!picked.includes(p)) picked.push(p);
+    }
+    return { dateKey: todayKey, keys: picked.map(p => p.key), weakCat, weakKey: picked[0] ? picked[0].key : null };
+  }
+
+  function getDailyEntries() {
+    const todayKey = dayKeyOf(new Date());
+    const pool = questionPool();
+    const byKey = Object.fromEntries(pool.map(p => [p.key, p]));
+    let d = state.daily;
+    const stale = !d || d.dateKey !== todayKey || !Array.isArray(d.keys) || d.keys.length === 0 || d.keys.some(k => !byKey[k]);
+    if (stale) {
+      d = buildDaily(todayKey);
+      state.daily = d;
+      localStorage.setItem('opic_daily', JSON.stringify(d));
+    }
+    return d.keys.map(k => byKey[k]).filter(Boolean);
+  }
+
+  function todayDoneKeys() {
+    const todayKey = dayKeyOf(new Date());
+    return new Set(state.history.filter(x => dayKeyFromHistory(x) === todayKey).map(x => x.questionKey));
+  }
+
+  // 연속 학습 일수: 오늘(또는 어제)부터 거꾸로 하루도 안 빠진 날 수
+  function studyStreak() {
+    const days = new Set(state.history.map(dayKeyFromHistory).filter(Boolean));
+    if (days.size === 0) return 0;
+    const cur = new Date();
+    if (!days.has(dayKeyOf(cur))) cur.setDate(cur.getDate() - 1);
+    let n = 0;
+    while (days.has(dayKeyOf(cur))) { n += 1; cur.setDate(cur.getDate() - 1); }
+    return n;
+  }
+
+  function renderToday() {
+    const entries = getDailyEntries();
+    const done = todayDoneKeys();
+    const doneCount = entries.filter(e => done.has(e.key)).length;
+    const weakKey = state.daily && state.daily.weakKey;
+    els.todayList.innerHTML = entries.length ? entries.map((e, i) => `
+      <div class="today-row ${done.has(e.key) ? 'done' : ''}">
+        <span class="today-num">${done.has(e.key) ? icon('check', 'ic ic-sm') : i + 1}</span>
+        <span class="li-body">
+          <span class="li-title">${esc(e.q.badge.replace(/^콤보 \d+ · /, ''))}</span>
+          <span class="li-sub">${esc(splitSetTitle(e.set.title).main)} · 시험 ${e.q.qNum}번</span>
+        </span>
+        ${e.key === weakKey ? `<span class="li-tag hot">약점 보강</span>` : `<span class="li-tag">${QCAT_LABELS[e.cat]}</span>`}
+      </div>`).join('') : `<div class="empty"><strong>서베이에 맞는 문제가 없어요</strong>서베이 주제를 골라주세요.</div>`;
+    els.todayProgress.textContent = `${doneCount}/${entries.length || DAILY_COUNT} 완료`;
+    els.btnStartToday.innerHTML = `${icon('mic', 'ic')}${doneCount === 0 ? '오늘의 3문제 시작' : doneCount >= entries.length ? '오늘 완료! 한 번 더 도전' : `이어서 하기 (${doneCount}/${entries.length})`}`;
+    els.btnStartToday.disabled = entries.length === 0;
+    const streak = studyStreak();
+    els.streakChip.innerHTML = `${icon('flame', 'ic ic-sm')}${streak}일 연속`;
+    els.streakChip.classList.toggle('on', streak > 0);
+    const lastSet = DATA.comboSets.find(s => s.id === state.lastSetId);
+    els.btnContinueLast.hidden = !lastSet;
+    if (lastSet) els.btnContinueLast.innerHTML = `${esc(splitSetTitle(lastSet.title).main)} 이어하기 ${icon('right', 'ic ic-sm')}`;
+  }
+
+  function renderChecklist() {
+    const hasTake = state.history.some(x => x.takeId && state.takeIds.has(x.takeId));
+    const steps = [
+      { ok: state.levelTested, title: '레벨테스트로 내 등급 확인', sub: '질문 3개 · 약 3분', action: 'go-leveltest' },
+      { ok: state.history.length > 0, title: '오늘의 3문제 중 하나 답변하기', sub: '에바가 묻고 → 준비 → 자동 녹음', action: 'start-today' },
+      { ok: hasTake, title: '내 테이크 다시 들어보기', sub: '기록 탭에서 ▶ 누르기', action: 'go-history' }
+    ];
+    const allDone = steps.every(s => s.ok);
+    els.homeChecklist.hidden = allDone;
+    if (allDone) return;
+    els.homeChecklist.innerHTML = `
+      <div class="checklist-head"><span class="eyebrow">시작 3단계</span><span class="caption">${steps.filter(s => s.ok).length}/3</span></div>
+      ${steps.map((s, i) => `
+        <button class="checklist-row ${s.ok ? 'done' : ''}" data-action="${s.action}" ${s.ok ? 'disabled' : ''}>
+          <span class="today-num">${s.ok ? icon('check', 'ic ic-sm') : i + 1}</span>
+          <span class="li-body"><span class="li-title">${s.title}</span><span class="li-sub">${s.sub}</span></span>
+          ${s.ok ? '' : icon('right', 'ic ic-sm li-arrow')}
+        </button>`).join('')}`;
+  }
+
+  // 오늘의 3문제를 하나의 가상 세트로 묶어 스튜디오 실행
+  function startTodaySession() {
+    const entries = getDailyEntries();
+    if (entries.length === 0) return showToast('서베이 주제를 먼저 골라주세요');
+    const done = todayDoneKeys();
+    const set = {
+      id: 'set_daily',
+      topicId: 'daily',
+      title: '오늘의 3문제',
+      type: 'daily',
+      questions: entries.map(e => Object.assign({}, e.q, { sourceKey: e.key, sourceSetId: e.set.id }))
+    };
+    state.studioMode = 'daily';
+    state.activeSets = [set];
+    const firstOpen = entries.findIndex(e => !done.has(e.key));
+    openStudio({ setIndex: 0, autoPlay: true });
+    if (firstOpen > 0) {
+      state.currentQIndex = firstOpen;
+      renderCurrentQuestion();
+      setTimeout(() => playQuestionAndStartPrepFlow(false), 450);
     }
   }
 
   function renderHomeSummary() {
-    // 이어하기 카드
-    const lastSet = DATA.comboSets.find(s => s.id === state.lastSetId);
-    if (lastSet) {
-      const t = splitSetTitle(lastSet.title);
-      els.continueTitle.textContent = '이어서 연습하기';
-      els.continueSub.textContent = t.main;
-    } else {
-      els.continueTitle.textContent = '실전 모의 인터뷰 시작';
-      els.continueSub.textContent = '내 서베이로 에바가 질문해요 · 듣기 → 준비 → 자동 녹음';
-    }
-
+    renderToday();
+    renderChecklist();
     els.quickNoteDesc.textContent = `저장 ${state.notebook.length}개`;
     els.quickPracticeDesc.textContent = `${DATA.comboSets.length}개 세트`;
 
@@ -607,23 +786,12 @@
     els.statAvgWords.textContent = avg;
     els.statBest.textContent = best;
 
-    // 최근 기록 3개
+    // 최근 테이크 2개 (재생 가능)
     if (h.length === 0) {
       els.homeRecentList.innerHTML = `<div class="empty"><strong>아직 연습 기록이 없어요</strong>첫 답변을 녹음하면 여기에 쌓여요.</div>`;
     } else {
-      els.homeRecentList.innerHTML = h.slice(0, 3).map(historyRowHtml).join('');
+      els.homeRecentList.innerHTML = h.slice(0, 2).map(x => historyCardHtml(x, { compact: true })).join('');
     }
-  }
-
-  function historyRowHtml(x) {
-    return `
-      <div class="list-item">
-        <span class="grade-pill">${esc(x.estGrade)}</span>
-        <span class="li-body">
-          <span class="li-title">${esc(x.badge)}</span>
-          <span class="li-sub">${esc(x.wordCount)}단어 · ${esc(x.wpm)} WPM · ${esc(x.date)}</span>
-        </span>
-      </div>`;
   }
 
   // --- 서베이 & 난이도 ---
@@ -895,6 +1063,19 @@
     speakWithBrowser(text, done);
   }
 
+  // --- 훈련/시험 모드 (시험: 질문·타이머·버튼만) ---
+  function applyStudioView() {
+    const exam = state.studioView === 'exam' || state.studioMode === 'leveltest';
+    document.body.classList.toggle('is-exam-view', exam);
+    els.studioModeSeg.hidden = state.studioMode === 'leveltest';
+    els.studioModeSeg.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('active', b.dataset.mode === (exam ? 'exam' : 'train')));
+  }
+
+  function showSttNotice(msg) {
+    els.sttNotice.innerHTML = `${icon('bulb', 'ic ic-sm')}<span>${msg}</span>`;
+    els.sttNotice.hidden = false;
+  }
+
   // --- 스튜디오 메인 버튼 상태 ---
   const PHASE_UI = {
     idle: { icon: 'play', label: '질문 듣기', aria: '질문 듣기' },
@@ -1026,9 +1207,14 @@
     const targetTextarea = els.liveTranscriptInput;
 
     if (!SpeechRecognition) {
-      showToast('실시간 음성 인식은 Chrome·Edge에서만 돼요. 직접 입력해도 분석할 수 있어요');
+      showSttNotice('이 브라우저는 실시간 음성 인식이 안 돼요. <strong>녹음은 저장되니</strong> 끝나면 들으면서 아래에 직접 적어보세요. 적으면 바로 분석돼요.');
     } else {
       state.recognition = new SpeechRecognition();
+      state.recognition.onerror = (ev) => {
+        if (['not-allowed', 'service-not-allowed', 'audio-capture', 'network'].includes(ev.error)) {
+          showSttNotice(`음성 인식이 막혔어요(${ev.error}). <strong>녹음은 계속돼요.</strong> 끝나면 들으면서 아래에 직접 적어보세요.`);
+        }
+      };
       state.recognition.lang = 'en-US';
       state.recognition.continuous = true;
       state.recognition.interimResults = true;
@@ -1133,6 +1319,13 @@
       } else if (els.liveTranscriptInput.value.trim().length > 0) {
         runAiCoaching();
         setTimeout(() => els.btnRunAiCoach.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
+      } else {
+        els.evaStatusPill.textContent = '녹음은 저장됐어요. 들으면서 스크립트를 적으면 분석할 수 있어요';
+        showSttNotice('인식된 문장이 없어요. <strong>녹음을 들으면서</strong> 아래에 영어로 적어보세요. 적으면 "AI 코칭"에서 바로 분석돼요.');
+        setTimeout(() => {
+          els.liveTranscriptInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          els.liveTranscriptInput.focus({ preventScroll: true });
+        }, 200);
       }
     }
   }
@@ -1495,7 +1688,7 @@
   }
 
   function leaveLevelTestMode() {
-    if (state.studioMode !== 'leveltest') return;
+    if (state.studioMode === 'practice') return;
     state.studioMode = 'practice';
     document.body.classList.remove('is-leveltest');
     filterActiveSetsBySurvey();
@@ -1680,10 +1873,12 @@
     const q = getCurrentQuestion();
 
     els.comboSetSelect.value = state.currentSetIndex;
-    els.studioSetTitle.innerHTML = state.studioMode === 'leveltest'
-      ? `<span class="icon-tile xs tone-indigo">${icon('target', 'ic')}</span>레벨테스트 ${state.currentQIndex + 1}/${set.questions.length}`
+    els.studioSetTitle.innerHTML = state.studioMode !== 'practice'
+      ? `${topicTile(set.topicId, 'xs')}${esc(set.title)} ${state.currentQIndex + 1}/${set.questions.length}`
       : `${topicTile(set.topicId, 'xs')}${esc(splitSetTitle(set.title).main)}`;
-    els.studioSetTitleBtn.disabled = state.studioMode === 'leveltest';
+    els.studioSetTitleBtn.disabled = state.studioMode !== 'practice';
+    els.sttNotice.hidden = true;
+    applyStudioView();
     setFlowStepBadge('listen');
     setStudioPhase('idle');
     els.evaStatusPill.textContent = '재생 버튼을 누르면 듣기 → 준비 → 녹음이 자동으로 이어져요';
@@ -1768,6 +1963,30 @@
     els.btnShowSampleAnswer.classList.toggle('active', tab === 'sample');
   }
 
+  // 이번 답변에서 고칠 점 1~2개 (규칙 기반)
+  function coachNotes(m, q) {
+    const cat = questionCategory(q);
+    const notes = [];
+    if (m.wordCount < 45) notes.push(`답변이 <strong>${m.wordCount}단어</strong>예요. 주어+동사 문장을 2개만 더 붙여 45단어를 넘겨보세요.`);
+    else if (m.wordCount < 70) notes.push(`<strong>${70 - m.wordCount}단어</strong>만 더 이어가면 70단어(약 50초) 안정권이에요. 이유나 느낌을 한 문장 덧붙여보세요.`);
+    if (cat === 'past' && m.pastVerbCount < 2) notes.push(`과거 경험 질문인데 과거형 동사가 <strong>${m.pastVerbCount}개</strong>예요. <code>went</code> <code>had</code> <code>felt</code>로 사건을 순서대로 말해보세요.`);
+    if (m.fillerCount < 1) notes.push('연결어가 없어요. <code>Well,</code> <code>Actually,</code> <code>To be honest,</code>로 문장을 시작하면 자연스러워져요.');
+    if (notes.length < 2 && m.wordCount >= 70 && m.richAdjCount === 0) notes.push('감정·묘사 형용사(<code>cozy</code> <code>relieved</code> <code>breathtaking</code>)를 1~2개 넣으면 IH 느낌이 나요.');
+    if (notes.length === 0) notes.push('좋아요! 이 길이와 속도를 유지하면서 아래 모범답안의 표현을 하나씩 흡수해보세요.');
+    return notes.slice(0, 2);
+  }
+
+  // 녹음 후 스크립트를 나중에 적은 경우, 방금 저장한 기록에 채워 넣기
+  function fillLastHistoryTranscript(text, m) {
+    const item = state.history.find(x => x.id === state.lastHistoryId);
+    const q = getCurrentQuestion();
+    const key = q.sourceKey || questionKeyOf(getCurrentSet(), state.currentQIndex);
+    if (!item || item.questionKey !== key || item.transcript) return;
+    Object.assign(item, { transcript: text, wordCount: m.wordCount, wpm: m.wpm, estGrade: m.estGrade });
+    localStorage.setItem('opic_history', JSON.stringify(state.history));
+    renderHistory();
+  }
+
   function runAiCoaching() {
     const userText = els.liveTranscriptInput.value.trim();
     const q = getCurrentQuestion();
@@ -1778,6 +1997,7 @@
 
     const m = analyzeTranscriptMetrics(userText, state.recordingSeconds || 50);
     const est = m.estGrade === '-' ? 'IM1' : m.estGrade;
+    fillLastHistoryTranscript(userText, m);
 
     state.currentGrade = est;
     localStorage.setItem('opic_current_grade', est);
@@ -1795,6 +2015,15 @@
 
     els.aiFeedbackContainer.innerHTML = `
       ${resultHeadHtml(est, '이번 답변 예상 등급', m)}
+      <div class="result-section">
+        <div class="result-section-title"><span>이번 답변에서 고칠 점</span></div>
+        <ul class="lt-notes">${coachNotes(m, q).map(n => `<li>${n}</li>`).join('')}</ul>
+      </div>
+      <div class="next-actions">
+        <button class="btn btn-tonal" data-action="retry">${icon('replay')}다시 답변</button>
+        <button class="btn btn-tonal" data-action="shadow">${icon('volume')}모범답안 따라 말하기</button>
+        <button class="btn btn-tonal" data-action="save-script">${icon('star')}노트 저장</button>
+      </div>
       <div class="result-section">
         <div class="result-section-title">
           <span>IH/AL 업그레이드 스크립트</span>
@@ -1853,6 +2082,12 @@
     else if (action === 'go-home') { closeLevelTestSheet(); navigateTo('home'); }
     else if (action === 'go-setup') { closeLevelTestSheet(); navigateTo('setup'); }
     else if (action === 'lt-close') closeLevelTestSheet();
+    else if (action === 'start-today') startTodaySession();
+    else if (action === 'go-leveltest') navigateTo('leveltest');
+    else if (action === 'go-history') navigateTo('history');
+    else if (action === 'retry') { resetTranscript(); startAnswering('studio'); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+    else if (action === 'shadow') { renderSampleAnswer(); showResultTab('sample'); speakEnglishText(getCurrentQuestion().sampleIH); }
+    else if (action === 'save-script') els.btnSaveMyScriptToNote.click();
   }
 
   // --- 만능노트 & 히스토리 ---
@@ -1916,8 +2151,8 @@
       createdAt: now.toISOString(),
       date: now.toLocaleString('ko-KR'),
       dateKey: now.toLocaleDateString('ko-KR'),
-      questionKey: questionKeyOf(set, state.currentQIndex),
-      setId: set.id,
+      questionKey: q.sourceKey || questionKeyOf(set, state.currentQIndex),
+      setId: q.sourceSetId || set.id,
       qNum: q.qNum,
       badge: q.badge,
       promptEn: q.promptEn,
@@ -1928,13 +2163,14 @@
       estGrade: m.estGrade,
       takeId
     };
+    state.lastHistoryId = item.id;
     state.history.unshift(item);
     state.history = state.history.slice(0, 50);
     localStorage.setItem('opic_history', JSON.stringify(state.history));
     if (pendingTake) {
       pendingTake.meta = {
         questionKey: item.questionKey,
-        setId: set.id,
+        setId: item.setId,
         qNum: q.qNum,
         badge: q.badge,
         createdAt: item.createdAt,
@@ -1974,11 +2210,14 @@
       els.historyListContainer.innerHTML = `<div class="empty"><strong>아직 연습 기록이 없어요</strong>인터뷰에서 답변을 마치면 자동으로 저장돼요.</div>`;
       return;
     }
-    els.historyListContainer.innerHTML = state.history.map(h => {
-      const hasTake = !!(h.takeId && state.takeIds.has(h.takeId));
-      const dur = h.durationSec ? ` · ${formatTime(h.durationSec)}` : '';
-      return `
-      <div class="history-card" data-history-id="${esc(h.id)}">
+    els.historyListContainer.innerHTML = state.history.map(h => historyCardHtml(h)).join('');
+  }
+
+  function historyCardHtml(h, { compact = false } = {}) {
+    const hasTake = !!(h.takeId && state.takeIds.has(h.takeId));
+    const dur = h.durationSec ? ` · ${formatTime(h.durationSec)}` : '';
+    return `
+      <div class="history-card ${compact ? 'compact' : ''}" data-history-id="${esc(h.id)}">
         <div class="history-top">
           <span class="grade-pill">${esc(h.estGrade)}</span>
           <span class="li-body">
@@ -1987,14 +2226,13 @@
           </span>
           <span class="note-actions">
             ${hasTake ? `<button class="icon-only sm" data-action="play-take" data-id="${esc(h.takeId)}" aria-label="다시 듣기">${icon('play')}</button>` : ''}
-            <button class="icon-only sm" data-action="delete-history" data-id="${esc(h.id)}" aria-label="삭제">${icon('trash')}</button>
+            ${compact ? '' : `<button class="icon-only sm" data-action="delete-history" data-id="${esc(h.id)}" aria-label="삭제">${icon('trash')}</button>`}
           </span>
         </div>
-        <div class="history-q">Q. ${esc(h.promptEn)}</div>
-        ${h.transcript ? `<div class="history-a">${esc(h.transcript)}</div>` : `<div class="history-a caption">스크립트 없음 · 녹음만 저장됨</div>`}
+        ${compact ? '' : `<div class="history-q">Q. ${esc(h.promptEn)}</div>
+        ${h.transcript ? `<div class="history-a">${esc(h.transcript)}</div>` : `<div class="history-a caption">스크립트 없음 · 녹음만 저장됨</div>`}`}
         <div class="take-player" hidden></div>
       </div>`;
-    }).join('');
   }
 
   // --- 커스텀 드롭다운 (값은 숨긴 네이티브 select에 그대로 저장) ---
@@ -2143,13 +2381,15 @@
 
     // 홈
     els.btnGoSurveyStep.onclick = () => navigateTo('setup');
-    els.btnQuickStartStudio.onclick = () => {
-      if (state.lastSetId) {
-        startSetById(state.lastSetId);
-      } else {
-        filterActiveSetsBySurvey();
-        openStudio({ autoPlay: true });
-      }
+    els.btnStartToday.onclick = startTodaySession;
+    els.btnContinueLast.onclick = () => { if (state.lastSetId) startSetById(state.lastSetId); };
+    els.studioModeSeg.onclick = (e) => {
+      const b = e.target.closest('[data-mode]');
+      if (!b) return;
+      state.studioView = b.dataset.mode;
+      localStorage.setItem('opic_studio_view', state.studioView);
+      applyStudioView();
+      showToast(state.studioView === 'exam' ? '시험 모드 · 질문·타이머·버튼만 보여요' : '훈련 모드 · 팁·지표·추임새를 보여줘요');
     };
 
     // 설정: 티어 카드
@@ -2225,6 +2465,10 @@
         state.currentQIndex += 1;
       } else if (state.studioMode === 'leveltest') {
         finishLevelTest();
+        return;
+      } else if (state.studioMode === 'daily') {
+        showToast('오늘의 3문제 완료! 수고했어요');
+        navigateTo('home');
         return;
       } else {
         state.currentSetIndex = (state.currentSetIndex + 1) % state.activeSets.length;
@@ -2377,9 +2621,9 @@
     els.obBackBtn.style.visibility = ob.step === 0 ? 'hidden' : 'visible';
     els.obHomeBtn.hidden = ob.step !== OB_STEP_COUNT - 1;
 
-    const labels = ['시작하기', '다음', '다음', '다음', '첫 질문 들어보기'];
+    const labels = ['시작하기', '다음', '다음', '다음', '레벨테스트 하러 가기 (3분)'];
     els.obNextBtn.innerHTML = ob.step === OB_STEP_COUNT - 1
-      ? `${icon('mic', 'ic')}${labels[ob.step]}`
+      ? `${icon('target', 'ic')}${labels[ob.step]}`
       : `${labels[ob.step]}${icon('right', 'ic')}`;
 
     if (ob.step === 1) renderObTiers();
@@ -2442,11 +2686,7 @@
     renderUserTierAndRoadmap();
     renderPracticeList();
     filterActiveSetsBySurvey();
-    if (goStudio) {
-      openStudio({ autoPlay: true });
-    } else {
-      navigateTo('home');
-    }
+    navigateTo(goStudio ? 'leveltest' : 'home');
     showToast(`준비 완료 · ${TIER_PRESETS[ob.tier].name} · 목표 ${ob.target}`);
   }
 
