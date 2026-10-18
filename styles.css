@@ -898,3 +898,28 @@ body.is-immersive .toast-popup { bottom: calc(24px + env(safe-area-inset-bottom)
 .take-player { margin-top: 0.6rem; display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.5rem 0.4rem 0.75rem; background: var(--indigo-soft); color: var(--indigo); border-radius: var(--r-md); }
 .take-player audio { flex: 1; height: 34px; min-width: 0; }
 .take-player .caption { color: var(--indigo); font-weight: 700; white-space: nowrap; }
+
+/* ==================== 실전 서베이 ==================== */
+.survey-note {
+  display: flex; align-items: flex-start; gap: 0.5rem;
+  margin-top: 0.2rem; padding: 0.75rem 0.85rem;
+  background: var(--primary-soft); color: var(--text-2);
+  border-radius: var(--r-md); font-size: 0.82rem; line-height: 1.55;
+}
+.survey-note .ic { width: 18px; height: 18px; color: var(--primary); flex-shrink: 0; margin-top: 0.1rem; }
+.survey-note strong { color: var(--text); }
+.dot-legend { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--emerald); vertical-align: middle; margin: 0 0.1rem; }
+.survey-hint { margin-left: 0.4rem; font-size: 0.7rem; font-weight: 700; color: var(--primary); background: var(--primary-soft); padding: 0.1rem 0.45rem; border-radius: 6px; }
+.survey-chip { position: relative; }
+.survey-chip.has-q::after {
+  content: ''; position: absolute; top: 4px; right: 4px;
+  width: 7px; height: 7px; border-radius: 50%; background: var(--emerald);
+  box-shadow: 0 0 0 2px var(--surface);
+}
+.survey-chip.selected.has-q::after { box-shadow: 0 0 0 2px var(--primary-soft); }
+.chip-warn { background: var(--amber-soft); color: var(--amber); }
+
+/* 홈 등급 카드: 레벨테스트 전 잠금 */
+.grade-card.is-locked .grade-col:not(.is-target) .grade-val { color: var(--text-3); }
+.grade-card.is-locked .roadmap-gauge-fill { background: var(--text-3); }
+.lock-cta { margin-top: 0.7rem; width: 100%; }

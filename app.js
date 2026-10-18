@@ -77,6 +77,14 @@
     roleplay: ['chat', 'tone-primary'],
     unexpected: ['zap', 'tone-violet']
   };
+  // 서베이와 관계없이 항상 출제되는 유형(세트의 topicId 기준)
+  const ALWAYS_TOPICS = ['intro', 'roleplay', 'unexpected'];
+  // 예전 버전 서베이 ID → 실전 서베이 ID
+  const SURVEY_MIGRATE = {
+    house: ['live_family'],
+    workout: ['gym', 'jogging', 'walking'],
+    travel: ['travel_domestic', 'travel_abroad']
+  };
   const EVA_ART = '<span class="eva-art"><svg viewBox="0 0 104 104"><use href="#i-eva"/></svg></span>';
   const EVA_MIC = '<svg class="ic eva-mic"><use href="#i-mic"/></svg>';
   const TYPE_LABELS = { single: '자기소개', combo3: '3콤보', roleplay: '롤플레이', combo2: '고난도 14~15' };
@@ -103,6 +111,28 @@
   const readJSON = (key, fallback) => {
     try { return JSON.parse(localStorage.getItem(key) || 'null') ?? fallback; } catch (_) { return fallback; }
   };
+
+  // 서베이 선택값 정리: 모르는 ID 제거, 옛 ID 이관, 하나만 고르는 파트는 정확히 1개 보장
+  function normalizeSurveyIds(ids) {
+    const valid = new Set(DATA.surveyTopics.map(t => t.id));
+    let out = [];
+    if (!Array.isArray(ids)) {
+      out = DATA.surveyTopics.filter(t => t.defaultChecked).map(t => t.id);
+    } else {
+      ids.forEach(id => {
+        if (valid.has(id)) out.push(id);
+        else if (SURVEY_MIGRATE[id]) out.push(...SURVEY_MIGRATE[id]);
+      });
+    }
+    out = [...new Set(out)];
+    DATA.surveySections.filter(sec => sec.single).forEach(sec => {
+      const items = DATA.surveyTopics.filter(t => t.section === sec.id);
+      const chosen = items.filter(t => out.includes(t.id));
+      if (chosen.length === 0) out.push((items.find(t => t.defaultChecked) || items[0]).id);
+      else if (chosen.length > 1) chosen.slice(1).forEach(t => { out = out.filter(id => id !== t.id); });
+    });
+    return out;
+  }
 
   // --- 상태 관리 ---
   let state = {
@@ -144,8 +174,8 @@
     waveformAnimId: null,
 
     // 로컬 저장 설정
-    selectedSurveyIds: readJSON('opic_survey_ids', null) ||
-      DATA.surveyTopics.filter(t => t.defaultChecked).map(t => t.id),
+    selectedSurveyIds: normalizeSurveyIds(readJSON('opic_survey_ids', null)),
+    levelTested: localStorage.getItem('opic_level_tested') === '1',
     lastSetId: localStorage.getItem('opic_last_set') || null,
     settings: readJSON('opic_settings', null) || {
       targetGrade: 'IM3',
@@ -197,6 +227,7 @@
     heroProgressLabel: $('heroProgressLabel'),
     heroSurveySummary: $('heroSurveySummary'),
     heroGaugeFill: $('heroGaugeFill'),
+    gradeCard: $('gradeCard'),
     heroRoadmapCoach: $('heroRoadmapCoach'),
     btnGoSurveyStep: $('btnGoSurveyStep'),
     btnQuickStartStudio: $('btnQuickStartStudio'),
@@ -338,6 +369,8 @@
     // 예전 버전에 남아 있던 가짜 AI 설정 칸 값 정리
     delete state.settings.aiProvider;
     delete state.settings.apiKey;
+    // 옛 버전 서베이 ID를 실전 서베이 ID로 바꾼 결과를 저장
+    localStorage.setItem('opic_survey_ids', JSON.stringify(state.selectedSurveyIds));
     applyTheme();
     document.querySelectorAll('select.input').forEach(enhanceSelect);
     filterActiveSetsBySurvey();
@@ -392,9 +425,33 @@
   }
 
   function topicTile(topicId, size = '') {
-    const [ic, tone] = TOPIC_ICONS[topicId] || ['book', 'tone-primary'];
+    const t = DATA.surveyTopics.find(x => x.id === topicId);
+    const [ic, tone] = t && t.icon ? [t.icon, t.tone || 'tone-primary'] : (TOPIC_ICONS[topicId] || ['book', 'tone-primary']);
     return `<span class="icon-tile ${size} ${tone}">${icon(ic, 'ic')}</span>`;
   }
+
+  function setTopicIds(set) {
+    return set.topicIds || [set.topicId];
+  }
+
+  // 이 세트가 내 서베이(또는 항상 출제 유형)에 해당하는지
+  function setMatchesSurvey(set) {
+    if (ALWAYS_TOPICS.includes(set.topicId)) return true;
+    return setTopicIds(set).some(id => state.selectedSurveyIds.includes(id));
+  }
+
+  const multiSections = () => DATA.surveySections.filter(sec => !sec.single).map(sec => sec.id);
+  // 여가·취미·운동·휴가에서 고른 개수 (실제 시험 기준 12개 이상)
+  function multiSurveyCount() {
+    const multi = multiSections();
+    return state.selectedSurveyIds.filter(id => {
+      const t = DATA.surveyTopics.find(x => x.id === id);
+      return t && multi.includes(t.section);
+    }).length;
+  }
+
+  // 연습 세트가 있는 서베이 항목
+  const topicsWithSets = new Set(DATA.comboSets.flatMap(setTopicIds));
 
   function gradeRank(g) { return GRADE_ORDER.indexOf(g); }
 
@@ -492,12 +549,24 @@
     const tgt = Math.max(1, gradeRank(target));
     const pct = Math.min(100, Math.round(((cur + 1) / (tgt + 1)) * 100));
 
-    els.heroCurrentGrade.textContent = state.currentGrade;
     els.heroTargetGrade.textContent = target;
-    els.heroProgressLabel.textContent = `${target}까지 ${pct}%`;
-    els.heroSurveySummary.textContent = `서베이 ${state.selectedSurveyIds.length}개 · 난이도 ${state.difficulty}단계`;
-    els.heroGaugeFill.style.width = `${pct}%`;
-    els.heroRoadmapCoach.innerHTML = `<div class="coach-title">${icon('bulb')}${target}까지 가려면</div>${preset.coachGuide}`;
+    els.heroSurveySummary.textContent = `서베이 ${multiSurveyCount()}개 · 난이도 ${state.difficulty}단계`;
+    els.gradeCard.classList.toggle('is-locked', !state.levelTested);
+    if (state.levelTested) {
+      els.heroCurrentGrade.textContent = state.currentGrade;
+      els.heroProgressLabel.textContent = `${target}까지 ${pct}%`;
+      els.heroGaugeFill.style.width = `${pct}%`;
+      els.heroRoadmapCoach.innerHTML = `<div class="coach-title">${icon('bulb')}${target}까지 가려면</div>${preset.coachGuide}`;
+    } else {
+      // 레벨테스트 전에는 예상 등급을 보여주지 않는다
+      els.heroCurrentGrade.textContent = '?';
+      els.heroProgressLabel.textContent = '레벨테스트 후 표시돼요';
+      els.heroGaugeFill.style.width = '0%';
+      els.heroRoadmapCoach.innerHTML = `
+        <div class="coach-title">${icon('target')}지금 내 등급부터 확인해요</div>
+        1분만 말해보면 예상 등급과 <strong>${target}까지 남은 거리</strong>를 보여드려요.
+        <button class="btn btn-primary btn-sm lock-cta" data-go="leveltest">${icon('mic')}1분 레벨테스트 하기</button>`;
+    }
 
     els.tierCards.forEach(card => {
       card.classList.toggle('selected', card.dataset.tier === state.userTier);
@@ -555,40 +624,51 @@
 
   // --- 서베이 & 난이도 ---
   function renderSurveyScreen() {
-    els.surveyCountBadge.textContent = `${state.selectedSurveyIds.length}개 선택`;
-    if (els.obSurveyCount) els.obSurveyCount.textContent = `${state.selectedSurveyIds.length}개`;
+    const n = multiSurveyCount();
+    els.surveyCountBadge.textContent = `${n}개 선택`;
+    els.surveyCountBadge.classList.toggle('chip-warn', n < 12);
+    if (els.obSurveyCount) {
+      els.obSurveyCount.textContent = `${n}개`;
+      els.obSurveyCount.classList.toggle('chip-warn', n < 12);
+    }
     renderSurveyChips(els.surveyCategoriesContainer);
     if (els.obSurveyContainer) renderSurveyChips(els.obSurveyContainer);
     renderDifficultyCards();
   }
 
   function renderSurveyChips(container) {
-    const grouped = {};
-    DATA.surveyTopics.forEach(t => {
-      if (!grouped[t.category]) grouped[t.category] = [];
-      grouped[t.category].push(t);
-    });
-
     container.innerHTML = '';
-    Object.keys(grouped).forEach(cat => {
+
+    const note = document.createElement('div');
+    note.className = 'survey-note';
+    note.innerHTML = `${icon('sparkles')}<span><strong>자기소개 · 롤플레이 · 돌발 주제</strong>는 서베이와 상관없이 항상 나와요. <span class="dot-legend"></span> 표시는 지금 연습 문제가 있는 항목이에요.</span>`;
+    container.appendChild(note);
+
+    DATA.surveySections.forEach(sec => {
+      const items = DATA.surveyTopics.filter(t => t.section === sec.id);
       const label = document.createElement('div');
       label.className = 'survey-category-label';
-      label.textContent = cat;
+      label.innerHTML = `${esc(sec.name)}<span class="survey-hint">${sec.single ? '하나만' : '여러 개'}</span>`;
       container.appendChild(label);
 
       const grid = document.createElement('div');
       grid.className = 'survey-chip-grid';
 
-      grouped[cat].forEach(topic => {
+      items.forEach(topic => {
         const isSel = state.selectedSurveyIds.includes(topic.id);
         const chip = document.createElement('button');
-        chip.className = `survey-chip ${isSel ? 'selected' : ''}`;
+        chip.className = `survey-chip ${isSel ? 'selected' : ''} ${topicsWithSets.has(topic.id) ? 'has-q' : ''}`;
         chip.setAttribute('aria-pressed', isSel);
         chip.innerHTML = `${topicTile(topic.id, 'xs')}<span>${esc(topic.name)}</span><span class="chip-check">${icon('check')}</span>`;
         chip.onclick = () => {
-          if (state.selectedSurveyIds.includes(topic.id)) {
-            if (state.selectedSurveyIds.length <= 1) {
-              showToast('최소 1개 이상의 주제를 골라주세요');
+          if (sec.single) {
+            if (isSel) return;
+            const sectionIds = items.map(t => t.id);
+            state.selectedSurveyIds = state.selectedSurveyIds.filter(id => !sectionIds.includes(id));
+            state.selectedSurveyIds.push(topic.id);
+          } else if (isSel) {
+            if (multiSurveyCount() <= 1) {
+              showToast('여가·취미·운동·휴가에서 1개 이상은 골라주세요');
               return;
             }
             state.selectedSurveyIds = state.selectedSurveyIds.filter(id => id !== topic.id);
@@ -633,7 +713,7 @@
   }
 
   function filterActiveSetsBySurvey() {
-    let filtered = DATA.comboSets.filter(s => state.selectedSurveyIds.includes(s.topicId));
+    let filtered = DATA.comboSets.filter(setMatchesSurvey);
     if (filtered.length === 0) filtered = [...DATA.comboSets];
     state.activeSets = filtered;
     state.currentSetIndex = 0;
@@ -655,7 +735,7 @@
   function setCardHtml(set, { current = false } = {}) {
     const topic = topicOf(set);
     const t = splitSetTitle(set.title);
-    const mine = state.selectedSurveyIds.includes(set.topicId);
+    const mine = setMatchesSurvey(set);
     const practicedCount = state.history.filter(h => set.questions.some(q => q.badge === h.badge)).length;
     return `
       <button class="list-item ${current ? 'current' : ''}" data-set-id="${set.id}">
@@ -676,7 +756,7 @@
   function renderPracticeList() {
     const list = DATA.comboSets.filter(s =>
       (state.practiceFilter === 'all' || s.type === state.practiceFilter) &&
-      (!state.mySurveyOnly || state.selectedSurveyIds.includes(s.topicId))
+      (!state.mySurveyOnly || setMatchesSurvey(s))
     );
     els.practiceList.innerHTML = list.length
       ? list.map(s => setCardHtml(s)).join('')
@@ -1389,8 +1469,10 @@
 
     state.userTier = matchedTier;
     state.currentGrade = detectedGrade;
+    state.levelTested = true;
     localStorage.setItem('opic_user_tier', state.userTier);
     localStorage.setItem('opic_current_grade', state.currentGrade);
+    localStorage.setItem('opic_level_tested', '1');
     renderUserTierAndRoadmap();
 
     const p = TIER_PRESETS[matchedTier];
@@ -1601,6 +1683,8 @@
 
   // 결과 영역·노트·레벨테스트의 동적 버튼 이벤트 위임
   function handleDelegatedClick(e) {
+    const go = e.target.closest('[data-go]');
+    if (go && !go.closest('[data-action]')) { navigateTo(go.dataset.go); return; }
     const btn = e.target.closest('[data-action]');
     if (!btn) return;
     const { action, text, cat, ko, id } = btn.dataset;
@@ -1895,7 +1979,6 @@
     els.brandHomeLink.onclick = () => navigateTo('home');
     els.topUserTierBtn.onclick = () => navigateTo('setup');
     document.querySelectorAll('[data-back]').forEach(b => { b.onclick = goBack; });
-    document.querySelectorAll('[data-go]').forEach(b => { b.onclick = () => navigateTo(b.dataset.go); });
     document.addEventListener('click', handleDelegatedClick);
 
     // 시스템 뒤로가기(ESC)로 시트 닫기 / 몰입화면 나가기
@@ -2108,7 +2191,7 @@
     // 온보딩
     els.obBackBtn.onclick = () => obGo(ob.step - 1);
     els.obNextBtn.onclick = () => {
-      if (ob.step === 3 && state.selectedSurveyIds.length === 0) return showToast('주제를 1개 이상 골라주세요');
+      if (ob.step === 3 && multiSurveyCount() === 0) return showToast('여가·취미·운동·휴가에서 1개 이상 골라주세요');
       if (ob.step >= OB_STEP_COUNT - 1) finishOnboarding(true);
       else obGo(ob.step + 1);
     };
@@ -2169,10 +2252,11 @@
 
   function renderObSummary() {
     const p = TIER_PRESETS[ob.tier];
+    const multi = multiSections();
     const names = state.selectedSurveyIds
-      .map(id => (DATA.surveyTopics.find(t => t.id === id) || {}).name)
-      .filter(Boolean)
-      .map(n => n.replace(/\s*\(.*\)$/, ''));
+      .map(id => DATA.surveyTopics.find(t => t.id === id))
+      .filter(t => t && multi.includes(t.section))
+      .map(t => t.name.replace(/\s*\(.*\)$/, ''));
     const preview = names.slice(0, 3).join(', ') + (names.length > 3 ? ` 외 ${names.length - 3}개` : '');
     els.obSummary.innerHTML = `
       <div class="ob-sum-row">
