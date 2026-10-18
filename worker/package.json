@@ -1,0 +1,16 @@
+{
+  "name": "worker",
+  "version": "1.0.0",
+  "description": "친구들이 각자 키 없이 Gemini 첨삭을 쓰도록, 내 Gemini 키 하나를 이 서버에 숨겨 둡니다. 하루 사용 횟수는 Cloudflare KV에 \"날짜+초대코드(또는 기기)\" 키로 셉니다.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "wrangler": "^4.151.1"
+  }
+}

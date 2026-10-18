@@ -1668,7 +1668,10 @@
   }
 
   // --- AI 중계 서버 호출 ---
-  const apiBase = () => (localStorage.getItem('opic_api_base') || COACH_API_BASE || '').replace(/\/$/, '');
+  // 주소 우선순위: 테스트용 localStorage → 상수 → (PC에서 로컬 실행 중이면) 같은 PC의 Worker dev 서버
+  const LOCAL_WORKER = 'http://localhost:8787';
+  const isLocalHost = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+  const apiBase = () => (localStorage.getItem('opic_api_base') || COACH_API_BASE || (isLocalHost ? LOCAL_WORKER : '')).replace(/\/$/, '');
   const aiEnabled = () => !!apiBase();
 
   function deviceId() {
