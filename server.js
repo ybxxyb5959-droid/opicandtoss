@@ -1,7 +1,15 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { exec } = require('child_process');
+const { exec, spawnSync } = require('child_process');
+
+// 브라우저(Edge 앱 창) 열기. 실패하면 기본 브라우저로.
+function openBrowser(url) {
+  if (process.env.NO_OPEN) return;
+  if (process.platform !== 'win32') { exec(`open "${url}" || xdg-open "${url}"`); return; }
+  const r = spawnSync('cmd.exe', ['/c', 'start', '""', 'msedge', `--app=${url}`], { stdio: 'ignore', windowsHide: true });
+  if (r.status !== 0) spawnSync('cmd.exe', ['/c', 'start', '""', url], { stdio: 'ignore', windowsHide: true });
+}
 
 const PORT = Number(process.env.PORT) || 4173;
 const MIME_TYPES = {
@@ -40,19 +48,19 @@ server.listen(PORT, () => {
   console.log(`==================================================\n`);
 
   // 서버가 준비된 직후 자동으로 Edge 앱 창 열기
-  if (!process.env.NO_OPEN) {
-    exec(`start msedge --app=${url}`, (err) => {
-      if (err) {
-        exec(`start ${url}`);
-      }
-    });
-  }
+  openBrowser(url);
 });
 
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
+    // 이미 같은 포트에 앱 서버가 떠 있음(다른 창에서 켠 경우) → 그 주소로 브라우저만 연다
     const url = `http://127.0.0.1:${PORT}`;
-    exec(`start msedge --app=${url}`);
-    process.exit(0);
+    console.log(`\n[안내] 앱 서버가 이미 켜져 있어요 (포트 ${PORT}). 그 서버로 브라우저를 열게요: ${url}`);
+    console.log('       이 창은 닫아도 돼요. 앱을 완전히 끄려면 먼저 켜둔 다른 검은 창을 닫으세요.\n');
+    openBrowser(url);
+    setTimeout(() => process.exit(0), 300);
+    return;
   }
+  console.error('서버 오류:', err.message);
+  setTimeout(() => process.exit(1), 300);
 });
