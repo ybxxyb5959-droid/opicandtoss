@@ -1280,8 +1280,13 @@
     try {
       state.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       if (mode === 'studio') setupAudioRecorderAndVisualizer(state.mediaStream);
-    } catch (_) {
-      showToast('마이크 권한을 허용해 주세요');
+      markMicOk();
+    } catch (err) {
+      // 권한이 없으면 녹음을 멈추고 "마이크 허용이 필요해요" 화면. 허용되면 자동으로 녹음을 다시 시작한다
+      stopAnswering({ discard: true });
+      if (state.studioMode === 'practice' || state.studioMode === 'daily') { setStudioPhase('idle'); setFlowStepBadge('listen'); }
+      showMicSheet(err && err.name, () => startAnswering(mode));
+      return;
     }
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -2169,6 +2174,7 @@
 
   function openLevelTestSheet(html, { loading = false } = {}) {
     els.ltSheet.classList.toggle('is-loading', loading);
+    els.ltSheet.classList.remove('is-mic');
     els.ltSheetBody.innerHTML = html;
     els.ltSheet.hidden = false;
     els.ltSheet.scrollTop = 0;
@@ -2697,6 +2703,8 @@
     else if (action === 'go-home') { closeLevelTestSheet(); navigateTo('home'); }
     else if (action === 'go-setup') { closeLevelTestSheet(); navigateTo('setup'); }
     else if (action === 'lt-close') closeLevelTestSheet();
+    else if (action === 'mic-retry') requestMicPermission();
+    else if (action === 'mic-later') { micPending = null; closeMicSheet(); }
     else if (action === 'start-today') startTodaySession();
     else if (action === 'open-mock') { const r = state.mocks.find(x => x.id === id); if (r) openLevelTestSheet(mockReportHtml(r)); }
     else if (action === 'go-leveltest') navigateTo('leveltest');
@@ -3669,7 +3677,88 @@
     renderPracticeList();
     filterActiveSetsBySurvey();
     navigateTo(goStudio ? 'leveltest' : 'home');
+    if (!micGranted()) requestMicPermission();
     showToast(`준비 완료 · ${TIER_PRESETS[ob.tier].name} · 목표 ${ob.target}`);
+  }
+
+  // --- 마이크 권한: 온보딩 직후 요청, 차단 시 안내 화면, 허용되면 복구 ---
+  let micPending = null;
+  let micPermWatcher = null;
+  const micGranted = () => localStorage.getItem('opic_mic_ok') === '1';
+  function markMicOk() {
+    localStorage.setItem('opic_mic_ok', '1');
+  }
+
+  async function requestMicPermission(onAllowed) {
+    if (onAllowed) micPending = onAllowed;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      showMicSheet('NotSupportedError');
+      return false;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(t => t.stop());
+      markMicOk();
+      closeMicSheet();
+      showToast('마이크 준비 완료! 이제 말로 답하면 돼요');
+      const cb = micPending; micPending = null;
+      if (cb) setTimeout(cb, 150);
+      return true;
+    } catch (err) {
+      showMicSheet(err && err.name);
+      return false;
+    }
+  }
+
+  function micHelpHtml(stateName) {
+    const ua = navigator.userAgent;
+    const isIOS = /iPhone|iPad|iPod/.test(ua);
+    const isAndroid = /Android/.test(ua);
+    const isEdge = /Edg\//.test(ua);
+    let steps;
+    if (isIOS) steps = ['주소창 왼쪽 <strong>"AA"</strong> 또는 <strong>ᵃA</strong> 버튼 → <strong>웹사이트 설정</strong> → 마이크 → <strong>허용</strong>', '안 보이면: 아이폰 <strong>설정</strong> 앱 → Safari → 마이크 → 허용', '홈 화면에 추가한 앱이라면: 설정 앱 → 개인정보 보호 → 마이크에서 Safari 허용'];
+    else if (isAndroid) steps = ['주소창 왼쪽 <strong>자물쇠(또는 ⓘ)</strong> → <strong>권한</strong> → 마이크 → <strong>허용</strong>', '안 보이면: 폰 <strong>설정</strong> → 앱 → Chrome → 권한 → 마이크 허용', '그 다음 이 화면의 <strong>다시 시도</strong>를 눌러주세요'];
+    else steps = [`주소창 왼쪽 <strong>자물쇠(또는 설정 아이콘)</strong> 클릭 → <strong>마이크</strong>를 <strong>허용</strong>으로`, `${isEdge ? 'Edge' : 'Chrome'} 설정 → 개인정보 보호 → 사이트 권한 → 마이크에서 이 주소가 "차단"에 있으면 지우기`, '바꾼 뒤 <strong>다시 시도</strong>를 누르거나 새로고침하세요'];
+    const blocked = stateName === 'NotAllowedError' || stateName === 'denied' || stateName === 'SecurityError';
+    const noDevice = stateName === 'NotFoundError' || stateName === 'NotSupportedError';
+    return `
+      <div class="mic-sheet">
+        <span class="icon-tile mic-icon tone-rose">${icon('mic', 'ic')}</span>
+        <h2 class="h2">${noDevice ? '마이크를 찾을 수 없어요' : '마이크 허용이 필요해요'}</h2>
+        <p class="sub">${noDevice
+          ? '이 기기나 브라우저에서 마이크를 쓸 수 없어요. 마이크가 연결된 기기에서, Chrome·Edge·최신 Safari로 열어주세요.'
+          : blocked
+            ? '블루 오픽은 <strong>말로만</strong> 답해요. 마이크가 차단되어 있어서 녹음과 음성 인식을 할 수 없어요. 아래대로 허용으로 바꾸면 자동으로 이어져요.'
+            : '블루 오픽은 <strong>말로만</strong> 답해요. 녹음과 음성 인식을 위해 마이크를 허용해 주세요. 소리는 내 기기에만 저장돼요.'}</p>
+        ${blocked ? `<ol class="mic-steps">${steps.map(t => `<li>${t}</li>`).join('')}</ol>` : ''}
+        <button class="btn btn-primary btn-lg btn-block" data-action="mic-retry">${icon('mic')}${blocked ? '다시 시도' : '마이크 허용하기'}</button>
+        <p class="caption mic-note">허용 팝업이 뜨면 <strong>허용</strong>을 눌러주세요. 허용되는 순간 이 화면은 자동으로 닫혀요.</p>
+        <button class="link-btn mic-later" data-action="mic-later">나중에 할게요 (녹음 없이 둘러보기)</button>
+      </div>`;
+  }
+
+  function showMicSheet(stateName, onAllowed) {
+    if (onAllowed) micPending = onAllowed;
+    openLevelTestSheet(micHelpHtml(stateName));
+    els.ltSheet.classList.add('is-mic');
+    watchMicPermission();
+  }
+
+  function closeMicSheet() {
+    if (!els.ltSheet.classList.contains('is-mic')) return;
+    els.ltSheet.classList.remove('is-mic');
+    closeLevelTestSheet();
+  }
+
+  // 브라우저 설정에서 허용으로 바꾸면 자동 감지해서 복구
+  function watchMicPermission() {
+    if (micPermWatcher || !navigator.permissions || !navigator.permissions.query) return;
+    navigator.permissions.query({ name: 'microphone' }).then(p => {
+      micPermWatcher = p;
+      p.onchange = () => {
+        if (p.state === 'granted' && els.ltSheet.classList.contains('is-mic')) requestMicPermission();
+      };
+    }).catch(() => {});
   }
 
   // --- 서비스워커 (설치·오프라인) ---

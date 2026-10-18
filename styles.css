@@ -1202,3 +1202,16 @@ body.is-mock .stage-timer canvas { display: none !important; }
 .stage-top .flow-step-indicator { flex: 1; justify-content: flex-start; margin-bottom: 0; flex-wrap: nowrap; min-width: 0; overflow: hidden; }
 .stage-top .flow-step-badge { padding: 0.25rem 0.55rem; white-space: nowrap; }
 .stage-top .flow-sep { width: 10px; flex-shrink: 0; }
+
+/* 마이크 허용 안내 */
+.lt-sheet.is-mic .lt-sheet-body { justify-content: center; }
+.mic-sheet { text-align: center; padding: 1rem 0; }
+.mic-sheet .mic-icon { width: 76px; height: 76px; border-radius: 24px; margin: 0 auto 1rem; }
+.mic-sheet .mic-icon .ic { width: 36px; height: 36px; }
+.mic-sheet .h2 { font-size: 1.35rem; }
+.mic-sheet .sub { margin: 0.6rem 0 1rem; line-height: 1.6; }
+.mic-steps { text-align: left; background: var(--surface); border-radius: var(--r-lg); padding: 0.9rem 1rem 0.9rem 2rem; margin-bottom: 1rem; font-size: 0.88rem; line-height: 1.6; color: var(--text-2); box-shadow: var(--shadow-1); }
+.mic-steps li + li { margin-top: 0.4rem; }
+.mic-steps strong { color: var(--text); }
+.mic-note { margin-top: 0.6rem; }
+.mic-later { margin-top: 1rem; color: var(--text-3); }
