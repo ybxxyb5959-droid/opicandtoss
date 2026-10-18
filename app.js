@@ -80,6 +80,8 @@
     leveltest: ['target', 'tone-indigo']
   };
   const DAILY_COUNT = 3;
+  const MOCK_TOTAL = 15;
+  const MOCK_SECONDS = 40 * 60;
   // 질문 유형 (오늘의 3문제 약점 판단용)
   const QCAT_LABELS = { intro: '자기소개', describe: '묘사', routine: '루틴·습관', past: '과거 경험', roleplay: '롤플레이', advanced: '고난도 14~15' };
   // 서베이와 관계없이 항상 출제되는 유형(세트의 topicId 기준)
@@ -98,6 +100,7 @@
     { id: 'combo3', label: '3콤보' },
     { id: 'roleplay', label: '롤플레이' },
     { id: 'combo2', label: '고난도 14~15' },
+    { id: 'unexpected', label: '돌발' },
     { id: 'single', label: '자기소개' }
   ];
   const TAB_VIEWS = ['home', 'practice', 'notebook', 'history'];
@@ -185,7 +188,9 @@
     // 로컬 저장 설정
     selectedSurveyIds: normalizeSurveyIds(readJSON('opic_survey_ids', null)),
     levelTested: localStorage.getItem('opic_level_tested') === '1',
-    studioMode: 'practice', // 'practice' | 'leveltest' | 'daily'
+    studioMode: 'practice', // 'practice' | 'leveltest' | 'daily' | 'mock'
+    mock: null, // 진행 중 모의고사 { id, startedAt, answers:[], timerId }
+    mocks: readJSON('opic_mocks', []),
     studioView: localStorage.getItem('opic_studio_view') || 'train', // 'train' | 'exam'
     daily: readJSON('opic_daily', null),
     lastHistoryId: null,
@@ -265,6 +270,11 @@
 
     // 레벨테스트
     btnStartLevelTest: $('btnStartLevelTest'),
+    btnStartMock: $('btnStartMock'),
+    mockSummary: $('mockSummary'),
+    mockTimer: $('mockTimer'),
+    mockHistory: $('mockHistory'),
+    homeGrowthLine: $('homeGrowthLine'),
     ltSheet: $('ltSheet'),
     ltSheetBody: $('ltSheetBody'),
 
@@ -501,10 +511,16 @@
     els.bnavItems.forEach(btn => btn.classList.toggle('active', btn.dataset.view === viewId));
     els.screenViews.forEach(sec => sec.classList.toggle('active', sec.id === `view-${viewId}`));
     if (viewId === 'home') renderHomeSummary();
+    if (viewId === 'history') renderHistory();
     window.scrollTo({ top: 0 });
   }
 
   function goBack() {
+    if (state.studioMode === 'mock' && state.currentView === 'studio' && state.mock) {
+      if (!confirm('모의고사를 중단할까요? 지금까지 답변으로 리포트를 만들어요.')) return;
+      finishMock({ aborted: true });
+      return;
+    }
     navigateTo(TAB_VIEWS.includes(state.returnView) ? state.returnView : 'home');
   }
 
@@ -787,6 +803,21 @@
     els.statAvgWords.textContent = avg;
     els.statBest.textContent = best;
 
+    // 이번 주 테이크 수 · 성장 요약
+    if (els.homeGrowthLine) {
+      const ws = weekStart(new Date());
+      const lastWs = new Date(ws); lastWs.setDate(lastWs.getDate() - 7);
+      const inWeek = (x, from, to) => x.createdAt && new Date(x.createdAt) >= from && (!to || new Date(x.createdAt) < to);
+      const cur = h.filter(x => inWeek(x, ws));
+      const prev = h.filter(x => inWeek(x, lastWs, ws));
+      const takesThisWeek = cur.filter(x => x.takeId && state.takeIds.has(x.takeId)).length;
+      const avgOf = arr => arr.length ? Math.round(arr.reduce((s, x) => s + (x.wordCount || 0), 0) / arr.length) : 0;
+      const d = cur.length && prev.length ? avgOf(cur) - avgOf(prev) : null;
+      els.homeGrowthLine.innerHTML = cur.length
+        ? `${icon('mic', 'ic ic-sm')}이번 주 테이크 <strong>${takesThisWeek}개</strong> · 답변 ${cur.length}개${d === null ? '' : ` · 지난주보다 평균 <strong class="${d >= 0 ? 'up' : 'down'}">${d > 0 ? '+' : ''}${d}단어</strong>`}`
+        : `${icon('mic', 'ic ic-sm')}이번 주 아직 테이크가 없어요. 오늘의 3문제로 시작해 보세요`;
+    }
+
     // 최근 테이크 2개 (재생 가능)
     if (h.length === 0) {
       els.homeRecentList.innerHTML = `<div class="empty"><strong>아직 연습 기록이 없어요</strong>첫 답변을 녹음하면 여기에 쌓여요.</div>`;
@@ -978,7 +1009,7 @@
 
   function renderPracticeList() {
     const list = DATA.comboSets.filter(s =>
-      (state.practiceFilter === 'all' || s.type === state.practiceFilter) &&
+      (state.practiceFilter === 'all' || s.type === state.practiceFilter || (state.practiceFilter === 'unexpected' && s.topicId === 'unexpected')) &&
       (!state.mySurveyOnly || setMatchesSurvey(s))
     );
     els.practiceList.innerHTML = list.length
@@ -1066,9 +1097,12 @@
 
   // --- 훈련/시험 모드 (시험: 질문·타이머·버튼만) ---
   function applyStudioView() {
-    const exam = state.studioView === 'exam' || state.studioMode === 'leveltest';
+    const forced = state.studioMode === 'leveltest' || state.studioMode === 'mock';
+    const exam = state.studioView === 'exam' || forced;
     document.body.classList.toggle('is-exam-view', exam);
-    els.studioModeSeg.hidden = state.studioMode === 'leveltest';
+    document.body.classList.toggle('is-mock', state.studioMode === 'mock');
+    els.studioModeSeg.hidden = forced;
+    els.mockTimer.hidden = state.studioMode !== 'mock';
     els.studioModeSeg.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('active', b.dataset.mode === (exam ? 'exam' : 'train')));
   }
 
@@ -1317,6 +1351,8 @@
       savePracticeHistoryItem();
       if (state.studioMode === 'leveltest') {
         recordLevelTestAnswer();
+      } else if (state.studioMode === 'mock') {
+        recordMockAnswer();
       } else if (els.liveTranscriptInput.value.trim().length > 0) {
         runAiCoaching();
         setTimeout(() => els.btnRunAiCoach.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
@@ -1690,6 +1726,9 @@
 
   function leaveLevelTestMode() {
     if (state.studioMode === 'practice') return;
+    if (state.mock && state.mock.timerId) { clearInterval(state.mock.timerId); state.mock.timerId = null; }
+    state.mock = null;
+    document.body.classList.remove('is-exam-view', 'is-mock');
     state.studioMode = 'practice';
     document.body.classList.remove('is-leveltest');
     filterActiveSetsBySurvey();
@@ -1713,6 +1752,264 @@
         ? `${done}/${total} 저장했어요. "다음 문제"를 눌러 이어가세요`
         : '인식된 문장이 없어요. 다시 답변하거나 다음 문제로 넘어가세요';
     }
+  }
+
+  // --- 실전 모의고사 (15문항) ---
+  function pickRandom(arr, n, seedStr) {
+    const list = arr.slice();
+    let x = hashSeed(seedStr || String(Date.now()));
+    const out = [];
+    while (list.length && out.length < n) {
+      x = (x * 1103515245 + 12345) >>> 0;
+      out.push(list.splice(x % list.length, 1)[0]);
+    }
+    return out;
+  }
+
+  function buildMockSet() {
+    const seed = 'mock' + Date.now();
+    const sets = DATA.comboSets;
+    const intro = sets.find(s => s.id === 'set_intro');
+    const surveyCombo = sets.filter(s => s.type === 'combo3' && s.topicId !== 'unexpected' && setMatchesSurvey(s));
+    const unexpectedCombo = sets.filter(s => s.type === 'combo3' && s.topicId === 'unexpected');
+    const roleplays = sets.filter(s => s.type === 'roleplay');
+    const advanced = sets.filter(s => s.type === 'combo2');
+
+    let combos = pickRandom(surveyCombo, 2, seed + 'c');
+    if (combos.length < 2) combos = combos.concat(pickRandom(unexpectedCombo.filter(s => !combos.includes(s)), 2 - combos.length, seed + 'c2'));
+    const unexpected = pickRandom(unexpectedCombo.filter(s => !combos.includes(s)), 1, seed + 'u');
+    const rpPref = roleplays.filter(s => setMatchesSurvey(s) && !ALWAYS_TOPICS.includes(s.topicId));
+    const roleplay = pickRandom(rpPref.length ? rpPref : roleplays, 1, seed + 'r');
+    const adv = pickRandom(advanced, 1, seed + 'a');
+
+    const order = [intro, ...combos, ...unexpected, ...roleplay, ...adv].filter(Boolean);
+    const questions = [];
+    order.forEach(set => set.questions.forEach((q, idx) => {
+      if (questions.length >= MOCK_TOTAL) return;
+      questions.push(Object.assign({}, q, {
+        qNum: questions.length + 1,
+        sourceKey: questionKeyOf(set, idx),
+        sourceSetId: set.id,
+        sourceBadge: q.badge,
+        cat: questionCategory(q)
+      }));
+    }));
+    return { id: 'set_mock', topicId: 'mock', title: '모의고사', type: 'mock', questions };
+  }
+
+  function renderMockSummary() {
+    const p = TIER_PRESETS[state.userTier] || TIER_PRESETS.beginner;
+    const target = state.settings.targetGrade || p.targetGrade;
+    const names = state.selectedSurveyIds
+      .map(id => DATA.surveyTopics.find(t => t.id === id))
+      .filter(t => t && multiSections().includes(t.section) && topicsWithSets.has(t.id))
+      .map(t => surveyShortName(t));
+    const last = state.mocks[0];
+    els.mockSummary.innerHTML = `
+      <div class="ob-sum-row">
+        <span class="icon-tile md tone-emerald">${icon('list', 'ic')}</span>
+        <span class="ob-sum-body"><span class="ob-sum-k">내 서베이 (문제 있는 주제 ${names.length}개)</span><span class="ob-sum-v">${esc(names.slice(0, 4).join(', '))}${names.length > 4 ? ` 외 ${names.length - 4}개` : ''}</span></span>
+      </div>
+      <div class="ob-sum-row">
+        <span class="icon-tile md tone-primary">${icon('target', 'ic')}</span>
+        <span class="ob-sum-body"><span class="ob-sum-k">난이도 · 목표</span><span class="ob-sum-v">${state.difficulty}단계 · ${esc(target)}</span></span>
+      </div>
+      <div class="ob-sum-row">
+        <span class="icon-tile md tone-amber">${icon('chart', 'ic')}</span>
+        <span class="ob-sum-body"><span class="ob-sum-k">지난 모의고사</span><span class="ob-sum-v">${last ? `${esc(last.grade)} · ${last.answered}/${last.total}문항 · ${esc(new Date(last.createdAt).toLocaleDateString('ko-KR'))}` : '아직 없어요'}</span></span>
+      </div>`;
+  }
+
+  function startMock() {
+    const set = buildMockSet();
+    if (set.questions.length < 5) return showToast('문제가 부족해요. 서베이 주제를 더 골라주세요');
+    state.studioMode = 'mock';
+    state.mock = { id: 'mock_' + Date.now().toString(36), startedAt: Date.now(), answers: [], timerId: null, total: set.questions.length };
+    state.activeSets = [set];
+    openStudio({ setIndex: 0, autoPlay: true });
+    tickMockTimer();
+    state.mock.timerId = setInterval(tickMockTimer, 1000);
+  }
+
+  function tickMockTimer() {
+    if (!state.mock) return;
+    const left = MOCK_SECONDS - Math.floor((Date.now() - state.mock.startedAt) / 1000);
+    els.mockTimer.textContent = formatTime(Math.max(0, left));
+    els.mockTimer.classList.toggle('warn', left <= 300);
+    if (left <= 0) {
+      showToast('40분이 끝났어요. 리포트를 만들게요');
+      finishMock({ timeout: true });
+    }
+  }
+
+  function recordMockAnswer() {
+    if (!state.mock) return;
+    const text = els.liveTranscriptInput.value.trim();
+    const seconds = state.recordingSeconds || 0;
+    const q = getCurrentQuestion();
+    const hist = state.history.find(x => x.id === state.lastHistoryId);
+    state.mock.answers[state.currentQIndex] = (text || seconds >= 3) ? {
+      num: q.qNum, badge: q.sourceBadge || q.badge, key: q.sourceKey, cat: q.cat || questionCategory(q),
+      text, seconds, m: analyzeTranscriptMetrics(text, seconds || 45),
+      historyId: hist && hist.questionKey === q.sourceKey ? hist.id : null
+    } : null;
+    const total = state.mock.total;
+    if (state.currentQIndex >= total - 1) {
+      finishMock({});
+    } else {
+      els.evaStatusPill.textContent = `${q.qNum}/${total} 완료 · "다음 문제"를 눌러 이어가세요`;
+    }
+  }
+
+  function finishMock({ aborted = false, timeout = false } = {}) {
+    const mock = state.mock;
+    if (!mock) return;
+    if (mock.timerId) clearInterval(mock.timerId);
+    mock.timerId = null;
+    const set = getCurrentSet();
+    const answers = mock.answers.filter(Boolean);
+    const usedSec = Math.floor((Date.now() - mock.startedAt) / 1000);
+
+    const ranks = answers.map(x => Math.max(0, gradeRank(x.m.estGrade)));
+    const grade = ranks.length ? GRADE_ORDER[Math.round(ranks.reduce((s, r) => s + r, 0) / ranks.length)] : '-';
+    // 유형별 평균 → 약한 유형
+    const byCat = {};
+    answers.forEach(x => { (byCat[x.cat] = byCat[x.cat] || []).push(Math.max(0, gradeRank(x.m.estGrade))); });
+    const catAvg = Object.entries(byCat).map(([cat, rs]) => ({ cat, avg: rs.reduce((s, r) => s + r, 0) / rs.length, n: rs.length }))
+      .sort((p, q) => p.avg - q.avg);
+    const weakCats = catAvg.slice(0, 2).filter(c => catAvg.length > 1 ? c.avg < catAvg[catAvg.length - 1].avg : true).map(c => c.cat);
+
+    const perQ = set.questions.map((q, i) => {
+      const x = mock.answers[i];
+      const hist = x && x.historyId ? state.history.find(y => y.id === x.historyId) : null;
+      return {
+        num: q.qNum, badge: q.sourceBadge || q.badge, key: q.sourceKey, cat: q.cat,
+        words: x ? x.m.wordCount : 0, sec: x ? x.seconds : 0, grade: x ? x.m.estGrade : '-',
+        fillers: x ? x.m.fillerCount : 0, past: x ? x.m.pastVerbCount : 0,
+        takeId: hist ? hist.takeId : null
+      };
+    });
+
+    const record = {
+      id: mock.id, createdAt: new Date(mock.startedAt).toISOString(), finishedAt: new Date().toISOString(),
+      grade, answered: answers.length, total: mock.total, usedSec, aborted, timeout,
+      avgWords: answers.length ? Math.round(answers.reduce((s, x) => s + x.m.wordCount, 0) / answers.length) : 0,
+      weakCats, perQ
+    };
+    state.mocks.unshift(record);
+    state.mocks = state.mocks.slice(0, 20);
+    localStorage.setItem('opic_mocks', JSON.stringify(state.mocks));
+
+    if (answers.length && !state.levelTested) {
+      // 모의고사도 등급 확인으로 인정
+      state.levelTested = true;
+      localStorage.setItem('opic_level_tested', '1');
+    }
+    if (grade !== '-') {
+      state.currentGrade = grade;
+      localStorage.setItem('opic_current_grade', grade);
+      renderUserTierAndRoadmap();
+    }
+    state.mock = null;
+    renderMockReport(record);
+  }
+
+  function mockReportHtml(r) {
+    const target = state.settings.targetGrade || 'IM3';
+    const cur = Math.max(0, gradeRank(r.grade));
+    const pct = r.grade === '-' ? 0 : Math.min(100, Math.round(((cur + 1) / (Math.max(1, gradeRank(target)) + 1)) * 100));
+    const rows = r.perQ.map(q => `
+      <div class="lt-row history-card compact mock-row" data-history-id="mock">
+        <span class="lt-row-q">Q${q.num}</span>
+        <span class="li-body">
+          <span class="li-title">${esc(q.badge.replace(/^콤보 \d+ · |^\d+번 · /, ''))}</span>
+          <span class="li-sub">${q.grade === '-' ? '답변 없음' : `${q.words}단어 · ${formatTime(q.sec)} · 연결어 ${q.fillers} · 과거동사 ${q.past}`}</span>
+        </span>
+        ${q.takeId && state.takeIds.has(q.takeId) ? `<button class="icon-only sm" data-action="play-take" data-id="${esc(q.takeId)}" aria-label="다시 듣기">${icon('play')}</button>` : ''}
+        <span class="grade-pill ${q.grade === '-' ? 'muted' : ''}">${esc(q.grade)}</span>
+        <div class="take-player" hidden></div>
+      </div>`).join('');
+    const weak = r.weakCats.length ? r.weakCats.map(c => QCAT_LABELS[c] || c).join(', ') : '-';
+    return `
+      <div class="lt-result-hero">
+        <span class="chip chip-indigo">모의고사 리포트${r.aborted ? ' · 중단' : r.timeout ? ' · 시간 초과' : ''}</span>
+        <div class="lt-result-grade">${esc(r.grade)}</div>
+        <p class="lt-result-cap">예상 등급 · ${r.answered}/${r.total}문항 답변 · ${formatTime(r.usedSec)} 소요</p>
+        <div class="lt-result-track"><div class="lt-result-fill" style="width:${pct}%"></div></div>
+        <p class="lt-result-sub">목표 <strong>${esc(target)}</strong>까지 ${pct}% · 평균 ${r.avgWords}단어</p>
+      </div>
+      <div class="coach-note">
+        <div class="coach-title">${icon('target')}약한 유형: ${esc(weak)}</div>
+        ${r.weakCats.length ? `홈의 "오늘의 3문제"에서 이 유형을 먼저 보강해 드릴게요. 유형별 연습 탭에서 골라 연습해도 좋아요.` : '답변이 적어 약점을 가리기 어려워요. 다음엔 끝까지 도전해 보세요.'}
+      </div>
+      <div class="result-section card-flat">
+        <div class="result-section-title"><span>문항별 결과 · ▶ 다시 듣기</span></div>
+        <div class="lt-rows">${rows}</div>
+      </div>
+      <div class="result-actions lt-result-actions">
+        <button class="btn btn-ghost btn-lg" data-action="go-home">홈으로</button>
+        <button class="btn btn-primary btn-lg" data-action="go-history">기록 보기</button>
+      </div>`;
+  }
+
+  function renderMockReport(r) {
+    document.body.classList.remove('is-mock');
+    openLevelTestSheet(mockReportHtml(r));
+    els.evaStatusPill.textContent = '모의고사 끝! 리포트를 확인하세요';
+  }
+
+  function renderMockHistory() {
+    if (!els.mockHistory) return;
+    if (!state.mocks.length) { els.mockHistory.innerHTML = ''; return; }
+    els.mockHistory.innerHTML = `
+      <div class="section-head tight"><h3 class="h3">모의고사 결과</h3><span class="caption">${state.mocks.length}회</span></div>
+      ${state.mocks.slice(0, 5).map(r => `
+        <button class="list-item" data-action="open-mock" data-id="${esc(r.id)}">
+          <span class="grade-pill">${esc(r.grade)}</span>
+          <span class="li-body">
+            <span class="li-title">${new Date(r.createdAt).toLocaleDateString('ko-KR')} · ${r.answered}/${r.total}문항${r.aborted ? ' · 중단' : ''}</span>
+            <span class="li-sub">약한 유형: ${esc(r.weakCats.map(c => QCAT_LABELS[c] || c).join(', ') || '-')} · 평균 ${r.avgWords}단어</span>
+          </span>
+          ${icon('right', 'ic li-arrow')}
+        </button>`).join('')}`;
+  }
+
+  // --- 테이크 비교 (같은 질문의 지난 답변) ---
+  function previousAttempt(item) {
+    if (!item || !item.questionKey) return null;
+    const idx = state.history.findIndex(x => x.id === item.id);
+    return state.history.slice(idx + 1).find(x => x.questionKey === item.questionKey) || null;
+  }
+
+  function deltaText(cur, prev, unit, { higherIsBetter = true } = {}) {
+    if (prev === undefined || prev === null || cur === undefined || cur === null) return '';
+    const d = cur - prev;
+    if (d === 0) return `<span class="delta same">같음</span>`;
+    const good = higherIsBetter ? d > 0 : d < 0;
+    return `<span class="delta ${good ? 'up' : 'down'}">${d > 0 ? '+' : ''}${d}${unit}</span>`;
+  }
+
+  function compareHtml(cur, prev) {
+    if (!prev) return '';
+    const gradeDelta = gradeRank(cur.estGrade) >= 0 && gradeRank(prev.estGrade) >= 0 ? gradeRank(cur.estGrade) - gradeRank(prev.estGrade) : null;
+    const player = (x, label) => `
+      <div class="cmp-col history-card compact" data-history-id="${esc(x.id)}">
+        <div class="cmp-head"><span class="caption">${label}</span><span class="grade-pill">${esc(x.estGrade)}</span></div>
+        <div class="cmp-meta">${x.wordCount}단어 · ${x.durationSec ? formatTime(x.durationSec) : '-'}</div>
+        ${x.takeId && state.takeIds.has(x.takeId) ? `<button class="btn btn-tonal btn-sm" data-action="play-take" data-id="${esc(x.takeId)}">${icon('play', 'ic ic-sm')}듣기</button>` : '<span class="caption">녹음 없음</span>'}
+        <div class="take-player" hidden></div>
+      </div>`;
+    return `
+      <div class="result-section">
+        <div class="result-section-title"><span>지난 테이크와 비교</span><span class="caption">${esc(prev.date)}</span></div>
+        <div class="cmp-grid">${player(prev, '지난번')}${player(cur, '이번')}</div>
+        <div class="cmp-deltas">
+          <span>단어 ${deltaText(cur.wordCount, prev.wordCount, '')}</span>
+          <span>시간 ${deltaText(cur.durationSec, prev.durationSec, '초')}</span>
+          <span>연결어 ${deltaText(cur.fillerCount, prev.fillerCount, '')}</span>
+          <span>등급 ${gradeDelta === null ? '-' : gradeDelta === 0 ? '<span class="delta same">같음</span>' : `<span class="delta ${gradeDelta > 0 ? 'up' : 'down'}">${gradeDelta > 0 ? '+' : ''}${gradeDelta}단계</span>`}</span>
+        </div>
+      </div>`;
   }
 
   function tierForGrade(grade) {
@@ -1891,7 +2188,9 @@
       btn.className = `q-step ${status}`;
       btn.innerHTML = `<span class="q-step-bar"></span><span class="q-step-name">Q${idx + 1} · ${esc(item.badge.replace(/^콤보 \d+ · |^\d+번 · /, ''))}</span>`;
       btn.title = item.badge;
+      btn.disabled = state.studioMode === 'mock' || state.studioMode === 'leveltest';
       btn.onclick = () => {
+        if (btn.disabled) return;
         state.currentQIndex = idx;
         resetTranscript();
         renderCurrentQuestion();
@@ -2025,6 +2324,7 @@
         <button class="btn btn-tonal" data-action="shadow">${icon('volume')}모범답안 따라 말하기</button>
         <button class="btn btn-tonal" data-action="save-script">${icon('star')}노트 저장</button>
       </div>
+      ${(() => { const cur = state.history.find(x => x.id === state.lastHistoryId); return cur ? compareHtml(cur, previousAttempt(cur)) : ''; })()}
       <div class="result-section">
         <div class="result-section-title">
           <span>IH/AL 업그레이드 스크립트</span>
@@ -2084,6 +2384,7 @@
     else if (action === 'go-setup') { closeLevelTestSheet(); navigateTo('setup'); }
     else if (action === 'lt-close') closeLevelTestSheet();
     else if (action === 'start-today') startTodaySession();
+    else if (action === 'open-mock') { const r = state.mocks.find(x => x.id === id); if (r) openLevelTestSheet(mockReportHtml(r)); }
     else if (action === 'go-leveltest') navigateTo('leveltest');
     else if (action === 'go-history') navigateTo('history');
     else if (action === 'retry') { resetTranscript(); startAnswering('studio'); window.scrollTo({ top: 0, behavior: 'smooth' }); }
@@ -2161,7 +2462,10 @@
       durationSec: seconds,
       wordCount: m.wordCount,
       wpm: m.wpm,
+      fillerCount: m.fillerCount,
+      pastVerbCount: m.pastVerbCount,
       estGrade: m.estGrade,
+      mockId: state.studioMode === 'mock' && state.mock ? state.mock.id : undefined,
       takeId
     };
     state.lastHistoryId = item.id;
@@ -2238,6 +2542,7 @@
   function renderHistory() {
     els.historyCountBadge.textContent = state.history.length;
     renderHistoryWeek();
+    renderMockHistory();
     if (els.takeCountChip) {
       els.takeCountChip.innerHTML = `${icon('mic')}녹음 ${state.takeIds.size}개 저장됨 · 최근 ${TAKE_LIMIT}개까지`;
     }
@@ -2265,6 +2570,7 @@
             ${compact ? '' : `<button class="icon-only sm" data-action="delete-history" data-id="${esc(h.id)}" aria-label="삭제">${icon('trash')}</button>`}
           </span>
         </div>
+        ${(() => { const p = previousAttempt(h); return p ? `<div class="history-cmp">지난번(${esc(p.dateKey || p.date)}) 대비 단어 ${deltaText(h.wordCount, p.wordCount, '')} · 등급 ${gradeRank(h.estGrade) >= 0 && gradeRank(p.estGrade) >= 0 ? deltaText(gradeRank(h.estGrade), gradeRank(p.estGrade), '단계') : '-'}</div>` : ''; })()}
         ${compact ? '' : `<div class="history-q">Q. ${esc(h.promptEn)}</div>
         ${h.transcript ? `<div class="history-a">${esc(h.transcript)}</div>` : `<div class="history-a caption">스크립트 없음 · 녹음만 저장됨</div>`}`}
         <div class="take-player" hidden></div>
@@ -2395,11 +2701,8 @@
     els.bnavItems.forEach(btn => {
       btn.onclick = () => navigateTo(btn.dataset.view);
     });
-    els.bnavFab.onclick = () => {
-      filterActiveSetsBySurvey();
-      restoreLastSet();
-      openStudio({ autoPlay: true });
-    };
+    els.bnavFab.onclick = () => { renderMockSummary(); navigateTo('mock'); };
+    els.btnStartMock.onclick = startMock;
     els.brandHomeLink.onclick = () => navigateTo('home');
     els.topUserTierBtn.onclick = () => navigateTo('setup');
     document.querySelectorAll('[data-back]').forEach(b => { b.onclick = goBack; });
@@ -2505,6 +2808,9 @@
       } else if (state.studioMode === 'daily') {
         showToast('오늘의 3문제 완료! 수고했어요');
         navigateTo('home');
+        return;
+      } else if (state.studioMode === 'mock') {
+        finishMock({});
         return;
       } else {
         state.currentSetIndex = (state.currentSetIndex + 1) % state.activeSets.length;

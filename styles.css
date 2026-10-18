@@ -1054,3 +1054,30 @@ body.is-exam-view .switch-row.on-dark { display: none; }
 .stat-delta.up { color: var(--emerald); }
 .stat-delta.down { color: var(--rose); }
 .stat-delta.muted { color: var(--text-3); }
+
+/* 모의고사 */
+.mock-timer { font-variant-numeric: tabular-nums; font-weight: 800; }
+.mock-timer.warn { background: var(--rose-soft); color: var(--rose); }
+body.is-mock #btnNextQuestion span::after { content: ''; }
+.mock-row { flex-wrap: wrap; }
+.mock-row .take-player { flex-basis: 100%; }
+.mock-history { margin-bottom: 0.8rem; }
+.lt-sheet .card-flat .lt-row { background: var(--surface-2); }
+
+/* 테이크 비교 */
+.cmp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+.cmp-col { background: var(--surface-2); border-radius: var(--r-md); padding: 0.7rem; box-shadow: none; display: flex; flex-direction: column; gap: 0.4rem; align-items: flex-start; }
+.cmp-head { display: flex; justify-content: space-between; align-items: center; width: 100%; }
+.cmp-head .grade-pill { height: 24px; min-width: 38px; font-size: 0.72rem; }
+.cmp-meta { font-size: 0.8rem; color: var(--text-2); font-weight: 600; }
+.cmp-col .take-player { width: 100%; margin-top: 0.2rem; }
+.cmp-deltas { display: flex; flex-wrap: wrap; gap: 0.4rem 0.9rem; margin-top: 0.6rem; font-size: 0.8rem; color: var(--text-2); font-weight: 600; }
+.delta { font-weight: 800; }
+.delta.up { color: var(--emerald); }
+.delta.down { color: var(--rose); }
+.delta.same { color: var(--text-3); }
+.history-cmp { font-size: 0.76rem; color: var(--text-3); margin: 0.1rem 0 0.4rem; font-weight: 600; }
+.growth-line { display: flex; align-items: center; gap: 0.35rem; font-size: 0.82rem; color: var(--text-2); margin: -0.1rem 0 0.7rem; padding: 0 0.2rem; }
+.growth-line .ic { color: var(--primary); }
+.growth-line strong.up { color: var(--emerald); }
+.growth-line strong.down { color: var(--rose); }

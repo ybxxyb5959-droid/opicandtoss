@@ -247,6 +247,7 @@
           <div class="stat"><span class="stat-val" id="statAvgWords">0</span><span class="stat-cap">평균 단어</span></div>
           <div class="stat"><span class="stat-val" id="statBest">-</span><span class="stat-cap">최고 등급</span></div>
         </div>
+        <div id="homeGrowthLine" class="growth-line"></div>
         <div id="homeRecentList" class="stack"></div>
       </section>
 
@@ -302,6 +303,7 @@
           <button id="btnClearHistory" class="btn btn-ghost btn-sm">초기화</button>
         </div>
         <div id="historyWeek" class="stat-row week-row"></div>
+        <div id="mockHistory" class="stack mock-history"></div>
         <div class="row-gap history-meta"><span id="takeCountChip" class="chip chip-soft"><svg class="ic ic-sm"><use href="#i-mic"/></svg>녹음 0개 저장됨</span></div>
         <div id="historyChart" class="card trend-card"></div>
         <div id="historyListContainer" class="stack"></div>
@@ -386,6 +388,36 @@
       </section>
 
       <!-- ==================== 1분 레벨테스트 (전체화면) ==================== -->
+      <!-- ==================== 실전 모의고사 시작 화면 ==================== -->
+      <section id="view-mock" class="screen-view immersive">
+        <div class="sub-header">
+          <button class="icon-only" data-back aria-label="뒤로"><svg class="ic"><use href="#i-left"/></svg></button>
+          <span class="sub-header-title">실전 모의고사</span>
+          <span class="sub-header-spacer"></span>
+        </div>
+        <div class="lt-intro">
+          <span class="chip chip-indigo">15문항 · 40분</span>
+          <h1 class="h1">실제 시험처럼<br />한 번에 끝까지</h1>
+          <p class="sub">내 서베이로 15문항이 자동 구성돼요. 다시 듣기는 문항당 1번, 이전 문항으로는 돌아갈 수 없어요.</p>
+        </div>
+        <div id="mockSummary" class="card ob-summary"></div>
+        <div class="section-head tight"><h3 class="h3">문항 구성</h3></div>
+        <div class="stack">
+          <div class="list-item"><span class="icon-tile tone-indigo lt-num">1</span><span class="li-body"><span class="li-title">자기소개</span><span class="li-sub">1번 고정</span></span></div>
+          <div class="list-item"><span class="icon-tile tone-primary lt-num">2~7</span><span class="li-body"><span class="li-title">내 서베이 주제 3콤보 × 2</span><span class="li-sub">묘사 → 루틴 → 과거 경험</span></span></div>
+          <div class="list-item"><span class="icon-tile tone-violet lt-num">8~10</span><span class="li-body"><span class="li-title">돌발 주제 3콤보</span><span class="li-sub">날씨·교통·재활용 등</span></span></div>
+          <div class="list-item"><span class="icon-tile tone-sky lt-num">11~13</span><span class="li-body"><span class="li-title">롤플레이</span><span class="li-sub">질문하기 → 문제 해결 → 유사 경험</span></span></div>
+          <div class="list-item"><span class="icon-tile tone-amber lt-num">14~15</span><span class="li-body"><span class="li-title">고난도</span><span class="li-sub">과거 vs 현재 비교 → 사회 이슈</span></span></div>
+        </div>
+        <div class="coach-note" style="margin-top:0.9rem;">
+          <div class="coach-title"><svg class="ic ic-sm"><use href="#i-bulb"/></svg>시험 모드로 진행돼요</div>
+          팁·지표·추임새는 숨겨지고 질문·타이머·버튼만 보여요. 중간에 나가면 그때까지 답변으로 리포트를 만들어요.
+        </div>
+        <div class="sticky-cta">
+          <button id="btnStartMock" class="btn btn-primary btn-lg btn-block"><svg class="ic"><use href="#i-mic"/></svg>모의고사 시작</button>
+        </div>
+      </section>
+
       <section id="view-leveltest" class="screen-view immersive">
         <div class="sub-header">
           <button class="icon-only" data-back aria-label="뒤로"><svg class="ic"><use href="#i-left"/></svg></button>
@@ -432,6 +464,7 @@
             <span id="studioSetTitle">세트</span>
             <svg class="ic ic-sm"><use href="#i-right"/></svg>
           </button>
+          <span id="mockTimer" class="chip chip-soft mock-timer" hidden>40:00</span>
           <div class="mode-seg" id="studioModeSeg" role="group" aria-label="연습 모드">
             <button type="button" data-mode="train">훈련</button>
             <button type="button" data-mode="exam">시험</button>
@@ -646,7 +679,7 @@
         <button class="bnav-item" data-view="practice">
           <svg class="ic"><use href="#i-book"/></svg><span class="bnav-label">연습</span>
         </button>
-        <button class="bnav-fab" id="bnavFab" aria-label="모의 인터뷰 시작">
+        <button class="bnav-fab" id="bnavFab" aria-label="실전 모의고사">
           <svg class="ic"><use href="#i-mic"/></svg>
         </button>
         <button class="bnav-item" data-view="notebook">
@@ -739,6 +772,7 @@
   <div id="toastMsg" class="toast-popup" role="status" aria-live="polite"></div>
 
   <script src="questions-data.js"></script>
+  <script src="questions-extra.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -2,7 +2,7 @@
 // - 앱 파일(HTML/JS/CSS/JSON): 네트워크 우선, 실패하면 캐시 → 업데이트가 바로 반영되고 오프라인에서도 열림
 // - 외부 글꼴(CDN): 캐시 우선, 없으면 네트워크. 실패해도 앱은 동작
 // 배포할 때 아래 VERSION만 올리면 옛 캐시가 정리된다.
-const VERSION = 'v2';
+const VERSION = 'v3';
 const CACHE_NAME = `malmun-${VERSION}`;
 const CORE_ASSETS = [
   './',
@@ -10,6 +10,7 @@ const CORE_ASSETS = [
   './styles.css',
   './app.js',
   './questions-data.js',
+  './questions-extra.js',
   './manifest.json'
 ];
 
