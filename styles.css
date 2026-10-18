@@ -1215,3 +1215,16 @@ body.is-mock .stage-timer canvas { display: none !important; }
 .mic-steps strong { color: var(--text); }
 .mic-note { margin-top: 0.6rem; }
 .mic-later { margin-top: 1rem; color: var(--text-3); }
+
+/* 설치 유도 페이지 */
+.install-gate { position: fixed; inset: 0; z-index: 120; background: var(--bg); overflow-y: auto; }
+.install-body { max-width: var(--col); margin: 0 auto; min-height: 100%; padding: 1.5rem var(--gutter) calc(2rem + env(safe-area-inset-bottom)); display: flex; flex-direction: column; justify-content: center; }
+.install-body .ob-hero { padding-bottom: 1.8rem; }
+.install-help { margin-top: 0.9rem; background: var(--surface); border-radius: var(--r-lg); padding: 0.9rem 1rem; box-shadow: var(--shadow-1); font-size: 0.88rem; line-height: 1.6; color: var(--text-2); animation: viewIn 0.25s ease; }
+.install-help strong { color: var(--text); }
+.install-help ol { margin: 0.4rem 0 0.5rem 1.1rem; padding: 0; }
+.install-help li + li { margin-top: 0.3rem; }
+.install-help .caption { display: block; margin-top: 0.3rem; }
+.ios-share { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; background: var(--primary-soft); color: var(--primary); font-weight: 800; }
+.install-skip { display: block; margin: 1.2rem auto 0; color: var(--text-3); }
+body.is-gate { overflow: hidden; }

@@ -14,6 +14,11 @@
     })();
   </script>
   <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="블루 오픽" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%232357e8'/><path d='M37.3 74A28.8 28.8 0 1 0 24.8 61.5L18.4 80.4Z' fill='none' stroke='white' stroke-width='7' stroke-linejoin='round'/><circle cx='38.4' cy='48.4' r='4.2' fill='white'/><circle cx='50.4' cy='48.4' r='4.2' fill='white'/><circle cx='62.4' cy='48.4' r='4.2' fill='white'/></svg>" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
   <link rel="stylesheet" href="styles.css" />
@@ -750,6 +755,20 @@
     </nav>
   </div>
 
+  <!-- 설치 유도 페이지: 브라우저로 접속했을 때만 (설치된 앱으로 열면 안 보임) -->
+  <div id="installGate" class="install-gate" hidden>
+    <div class="install-body">
+      <div class="ob-hero">
+        <span class="ob-logo"><svg class="ic"><use href="#i-logo"/></svg></span>
+        <h1 class="h1 ob-title">반가워요,<br /><span class="accent">블루 오픽</span></h1>
+        <p class="sub" id="installSub">말하는 만큼 오르는 오픽 연습.<br />앱으로 설치하면 홈 화면에서 바로 열려요.</p>
+      </div>
+      <button id="btnInstallApp" class="btn btn-primary btn-lg btn-block"><svg class="ic"><use href="#i-download"/></svg>앱 설치하기</button>
+      <div id="installHelp" class="install-help" hidden></div>
+      <button id="btnInstallSkip" class="link-btn install-skip">브라우저에서 바로 쓰기</button>
+    </div>
+  </div>
+
   <!-- 레벨테스트 로딩/결과 전체화면 시트 -->
   <div id="ltSheet" class="lt-sheet" hidden>
     <div id="ltSheetBody" class="lt-sheet-body"></div>
@@ -838,6 +857,7 @@
         <div class="field">
           <span class="field-label">처음부터 다시</span>
           <button id="btnRedoOnboarding" type="button" class="btn btn-ghost btn-block"><svg class="ic ic-sm"><use href="#i-replay"/></svg>시작 설정 다시 하기</button>
+          <button id="btnShowInstall" type="button" class="btn btn-ghost btn-block" style="margin-top:0.5rem"><svg class="ic ic-sm"><use href="#i-download"/></svg>앱 설치 안내 보기</button>
         </div>
       </div>
 

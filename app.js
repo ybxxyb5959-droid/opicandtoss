@@ -427,6 +427,12 @@
     obSurveyCount: $('obSurveyCount'),
     obSummary: $('obSummary'),
     pwaInstallBtn: $('pwaInstallBtn'),
+    installGate: $('installGate'),
+    installSub: $('installSub'),
+    btnInstallApp: $('btnInstallApp'),
+    installHelp: $('installHelp'),
+    btnInstallSkip: $('btnInstallSkip'),
+    btnShowInstall: $('btnShowInstall'),
     toastMsg: $('toastMsg')
   };
 
@@ -3769,20 +3775,93 @@
     navigator.serviceWorker.register('./sw.js').catch(() => {});
   }
 
+  // --- PWA 설치: 브라우저로 들어오면 설치 유도 페이지, 설치된 앱이면 바로 앱 ---
+  const isStandaloneApp = () => (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+  const isIOSDevice = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+  function openInstallGate() {
+    els.installGate.hidden = false;
+    els.installHelp.hidden = true;
+    document.body.classList.add('is-gate');
+    window.scrollTo({ top: 0 });
+  }
+  function closeInstallGate() {
+    els.installGate.hidden = true;
+    document.body.classList.remove('is-gate');
+  }
+  function installHelp(html) {
+    els.installHelp.innerHTML = html;
+    els.installHelp.hidden = false;
+  }
+
   function setupPwaInstall() {
     let deferredPrompt = null;
+    const ua = navigator.userAgent;
+    const isEdge = /Edg\//.test(ua);
+    const isSamsung = /SamsungBrowser/.test(ua);
+    const isAndroid = /Android/.test(ua);
+
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       deferredPrompt = e;
       els.pwaInstallBtn.style.display = 'inline-grid';
     });
-    els.pwaInstallBtn.onclick = async () => {
-      if (!deferredPrompt) return;
-      deferredPrompt.prompt();
-      await deferredPrompt.userChoice;
+    window.addEventListener('appinstalled', () => {
       deferredPrompt = null;
       els.pwaInstallBtn.style.display = 'none';
+      installHelp(`<strong>설치 완료!</strong> 홈 화면(또는 바탕화면)의 <strong>블루 오픽</strong> 아이콘으로 열어주세요. 이 창은 닫아도 돼요.`);
+      els.btnInstallApp.disabled = true;
+      els.btnInstallApp.innerHTML = `${icon('check')}설치됐어요`;
+    });
+
+    const doInstall = async () => {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const choice = await deferredPrompt.userChoice.catch(() => ({ outcome: 'dismissed' }));
+        deferredPrompt = null;
+        if (choice.outcome === 'accepted') installHelp('설치하고 있어요. 잠시 뒤 홈 화면에서 <strong>블루 오픽</strong>을 열어주세요.');
+        else installHelp('설치를 취소했어요. 다시 누르면 설치 창이 다시 떠요. 급하면 아래 "브라우저에서 바로 쓰기"로 먼저 써봐도 돼요.');
+        return;
+      }
+      if (isIOSDevice()) {
+        installHelp(`
+          <strong>아이폰은 이렇게 설치해요</strong>
+          <ol><li>화면 아래(또는 위) <strong>공유 버튼</strong> <span class="ios-share">⎙</span> 을 눌러요 (네모에 화살표)</li>
+          <li>목록에서 <strong>"홈 화면에 추가"</strong> 선택</li>
+          <li>오른쪽 위 <strong>추가</strong> → 홈 화면에 블루 오픽 아이콘이 생겨요</li></ol>
+          <span class="caption">Safari에서만 돼요. 카카오톡·인스타 안에서 열었다면 오른쪽 아래 메뉴 → "Safari로 열기" 먼저!</span>`);
+        return;
+      }
+      if (isStandaloneApp()) { closeInstallGate(); return; }
+      installHelp(`
+        <strong>이 브라우저에서는 이렇게 설치해요</strong>
+        <ol>${isAndroid
+          ? (isSamsung ? '<li>아래 메뉴(≡) → <strong>현재 페이지 추가</strong> → <strong>홈 화면</strong></li>' : '<li>오른쪽 위 <strong>⋮</strong> 메뉴 → <strong>앱 설치</strong> 또는 <strong>홈 화면에 추가</strong></li>')
+          : (isEdge ? '<li>오른쪽 위 <strong>⋯</strong> 메뉴 → <strong>앱</strong> → <strong>이 사이트를 앱으로 설치</strong></li>' : '<li>주소창 오른쪽 <strong>설치 아이콘</strong>(모니터+화살표) 또는 <strong>⋮</strong> 메뉴 → <strong>앱 설치</strong></li>')}
+        <li>설치가 끝나면 이 창은 닫고, 새로 생긴 <strong>블루 오픽</strong> 아이콘으로 열어주세요</li></ol>
+        <span class="caption">이미 설치돼 있다면 설치 메뉴가 안 보여요. 그땐 홈 화면/바탕화면 아이콘으로 열면 돼요.</span>`);
     };
+
+    els.btnInstallApp.onclick = doInstall;
+    els.pwaInstallBtn.onclick = doInstall;
+    els.btnInstallSkip.onclick = () => {
+      localStorage.setItem('opic_install_skip', '1');
+      closeInstallGate();
+    };
+    if (els.btnShowInstall) els.btnShowInstall.onclick = () => {
+      closeDropdown();
+      els.settingsModal.classList.remove('open');
+      localStorage.removeItem('opic_install_skip');
+      openInstallGate();
+    };
+
+    // 설치된 앱(홈 화면 아이콘)으로 열었거나, PC 개발 중이거나, 이미 "브라우저에서 쓰기"를 고른 경우는 바로 앱
+    const skipped = localStorage.getItem('opic_install_skip') === '1';
+    if (!isStandaloneApp() && !isLocalHost && !skipped) openInstallGate();
+
+    if (window.matchMedia) {
+      matchMedia('(display-mode: standalone)').addEventListener?.('change', (e) => { if (e.matches) closeInstallGate(); });
+    }
   }
 
   if ('speechSynthesis' in window) {
