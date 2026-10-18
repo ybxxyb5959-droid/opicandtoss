@@ -1,21 +1,33 @@
 @echo off
-chcp 65001 >nul
 cd /d "%~dp0"
+title Blue OPIc
 
 where node >nul 2>nul
-if not %errorlevel%==0 (
-  echo Node.jsê°€ ì—†ì–´ìš”. https://nodejs.org ì—ì„œ LTSë¥¼ ì„¤ì¹˜í•œ ë’¤ ë‹¤ì‹œ ì‹¤í–‰í•´ ì£¼ì„¸ìš”.
-  pause
-  exit /b
+if errorlevel 1 goto nonode
+
+rem AI server (local Worker): start it when worker\.dev.vars has a real key
+set AI=0
+if exist "%~dp0worker\.dev.vars" (
+  findstr /B /C:"GEMINI_API_KEY=" "%~dp0worker\.dev.vars" | findstr /V /C:"=$" | findstr /V /C:"KEY=¿©±â¿¡" >nul 2>nul && set AI=1
 )
 
-rem AI ì„œë²„(ë¡œì»¬ Worker): worker\.dev.vars ì— í‚¤ê°€ ìžˆìœ¼ë©´ ê°™ì´ ì¼ ë‹¤
-findstr /B /C:"GEMINI_API_KEY=" "%~dp0worker\.dev.vars" 2>nul | findstr /V /C:"ì—¬ê¸°ì—_í‚¤" | findstr /V /R /C:"GEMINI_API_KEY=$" >nul
-if %errorlevel%==0 (
-  start "ë¸”ë£¨ì˜¤í”½ AI ì„œë²„ (ë‹«ìœ¼ë©´ AI ì²¨ì‚­ì´ êº¼ì ¸ìš”)" cmd /k "cd /d "%~dp0worker" && npx wrangler dev --port 8787"
+if "%AI%"=="1" (
+  echo [AI] Gemini Å°¸¦ Ã£¾Ò¾î¿ä. AI ¼­¹ö¸¦ »õ Ã¢À¸·Î ÄÕ´Ï´Ù - ±× Ã¢À» ´ÝÀ¸¸é AI Ã·»èÀÌ ²¨Á®¿ä.
+  start "Blue OPIc AI server" cmd /k "cd /d %~dp0worker && npx wrangler dev --port 8787"
 ) else (
-  echo [ì•ˆë‚´] worker\.dev.vars ì— Gemini í‚¤ê°€ ì—†ì–´ì„œ AI ì²¨ì‚­ ì—†ì´ ì‹¤í–‰í•´ìš”. (ë‚´ìž¥ ì½”ì¹˜ë§Œ ë™ìž‘)
+  echo [AI] worker\.dev.vars ¿¡ Gemini Å°°¡ ¾ø¾î¼­ AI Ã·»è ¾øÀÌ ½ÇÇàÇØ¿ä.
 )
 
+echo [APP] ¾Û ¼­¹ö¸¦ ÄÕ´Ï´Ù. ÀÌ Ã¢À» ´ÝÀ¸¸é ¾ÛÀÌ ²¨Á®¿ä.
 set PORT=4180
 node "%~dp0server.js"
+echo.
+echo ¾Û ¼­¹ö°¡ Á¾·áµÆ¾î¿ä. ¾Æ¹« Å°³ª ´©¸£¸é Ã¢ÀÌ ´ÝÇô¿ä.
+pause >nul
+goto end
+
+:nonode
+echo Node.js °¡ ¾ø¾î¿ä. https://nodejs.org ¿¡¼­ LTS ¼³Ä¡ ÈÄ ´Ù½Ã ½ÇÇàÇØ ÁÖ¼¼¿ä.
+pause
+
+:end
