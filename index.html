@@ -205,8 +205,8 @@
         <div class="quick-grid">
           <button class="quick-item" data-go="leveltest">
             <span class="quick-ico tone-indigo"><svg class="ic"><use href="#i-target"/></svg></span>
-            <span class="quick-name">1분 레벨테스트</span>
-            <span class="quick-desc">내 등급 진단</span>
+            <span class="quick-name">레벨테스트</span>
+            <span class="quick-desc">질문 3개 · 약 3분</span>
           </button>
           <button class="quick-item" data-go="practice">
             <span class="quick-ico tone-primary"><svg class="ic"><use href="#i-book"/></svg></span>
@@ -339,7 +339,7 @@
             </div>
             <span id="surveyCountBadge" class="chip chip-primary">12개 선택</span>
           </div>
-          <p class="sub">실제 시험 설문과 같아요. Part를 눌러 펼치고 고르세요.</p>
+          <p class="sub">주제를 골라주세요. 지금은 연습 문제가 준비된 <span class="dot-legend"></span> 추천 항목만 선택할 수 있어요.</p>
           <div id="surveyCategoriesContainer"></div>
         </div>
 
@@ -377,35 +377,39 @@
       <section id="view-leveltest" class="screen-view immersive">
         <div class="sub-header">
           <button class="icon-only" data-back aria-label="뒤로"><svg class="ic"><use href="#i-left"/></svg></button>
-          <span class="sub-header-title">1분 레벨테스트</span>
+          <span class="sub-header-title">레벨테스트</span>
           <span class="sub-header-spacer"></span>
         </div>
 
         <div class="lt-intro">
-          <span class="chip chip-indigo">AI 실시간 진단</span>
+          <span class="chip chip-indigo">질문 3개 · 약 3분</span>
           <h1 class="h1">내 진짜 오픽 등급은?</h1>
-          <p class="sub">질문을 듣고 30~60초 동안 편하게 영어로 말해보세요. 예상 등급과 목표까지 필요한 것을 바로 알려드려요.</p>
+          <p class="sub">실전 인터뷰와 똑같이 진행돼요. 에바가 묻고 → 준비 → 자동 녹음. 끝나면 예상 등급과 목표까지 남은 거리를 알려드려요.</p>
         </div>
 
-        <div class="question-card">
-          <div class="q-head">
-            <span class="q-badge">진단 질문 · 현재+과거시제</span>
-            <button id="btnListenLevelTestQ" class="btn btn-tonal btn-sm"><svg class="ic ic-sm"><use href="#i-volume"/></svg>듣기</button>
+        <div class="stack">
+          <div class="list-item">
+            <span class="icon-tile tone-indigo lt-num">1</span>
+            <span class="li-body"><span class="li-title">자기소개</span><span class="li-sub">현재 시제 · 문장을 끊김 없이 잇는지</span></span>
           </div>
-          <p id="levelTestPromptEn" class="q-en">Tell me about yourself and what you usually do on weekends to relax. Also, tell me about what you did last weekend.</p>
-          <p class="q-ko">본인 소개, 평소 주말에 쉬려고 하는 일, 그리고 지난 주말에 한 일을 말해주세요.</p>
-        </div>
-
-        <div class="lt-control">
-          <div id="levelTestStatusText" class="status-line">듣기를 누르면 5초 준비 후 자동으로 녹음이 시작돼요</div>
-          <div class="row-center">
-            <button id="btnStartLevelTestRec" class="btn btn-primary btn-lg"><svg class="ic"><use href="#i-mic"/></svg>답변 시작</button>
-            <button id="btnStopLevelTestRec" class="btn btn-danger btn-lg" disabled><svg class="ic"><use href="#i-stop"/></svg>완료 · 진단</button>
+          <div class="list-item">
+            <span class="icon-tile tone-sky lt-num">2</span>
+            <span class="li-body"><span class="li-title">일상 묘사 · 루틴</span><span class="li-sub">답변 길이 · 연결어 · 말하기 속도</span></span>
+          </div>
+          <div class="list-item">
+            <span class="icon-tile tone-amber lt-num">3</span>
+            <span class="li-body"><span class="li-title">과거 경험</span><span class="li-sub">과거형 동사 · 감정 표현</span></span>
           </div>
         </div>
 
-        <textarea id="levelTestTranscript" class="input textarea transcript" placeholder="말하면 영어 문장이 여기에 실시간으로 입력돼요. 직접 타이핑해도 괜찮아요."></textarea>
-        <div id="levelTestResultBox" class="result-card" style="display:none;"></div>
+        <div class="coach-note" style="margin-top:0.9rem;">
+          <div class="coach-title"><svg class="ic ic-sm"><use href="#i-bulb"/></svg>진단은 이렇게 해요</div>
+          단어 수 · 말하기 속도 · 연결어 · 과거형 동사 · 감정 표현을 세서 등급을 어림잡는 <strong>간이 진단</strong>이에요. 조용한 곳에서, 틀려도 멈추지 말고 끝까지 말해보세요.
+        </div>
+
+        <div class="sticky-cta">
+          <button id="btnStartLevelTest" class="btn btn-primary btn-lg btn-block"><svg class="ic"><use href="#i-mic"/></svg>레벨테스트 시작</button>
+        </div>
       </section>
 
       <!-- ==================== 실전 인터뷰 스튜디오 (전체화면) ==================== -->
@@ -595,7 +599,7 @@
               </div>
               <span id="obSurveyCount" class="chip chip-primary">0개</span>
             </div>
-            <p class="sub">실제 시험 설문과 같아요. Part를 눌러 펼치고 고르세요. 귀찮으면 추천 12개로!</p>
+            <p class="sub">주제를 골라주세요. 지금은 연습 문제가 준비된 <span class="dot-legend"></span> 추천 항목만 선택할 수 있어요.</p>
           </div>
           <div id="obSurveyContainer"></div>
         </div>

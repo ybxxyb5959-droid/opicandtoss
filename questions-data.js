@@ -67,7 +67,7 @@ window.OPIC_DATA = {
     { id: 'newspaper', section: 'hobby', name: '신문 읽기', icon: 'newspaper', tone: 'tone-indigo' },
     { id: 'travel_blog', section: 'hobby', name: '여행 잡지 / 블로그 읽기', icon: 'globe', tone: 'tone-sky' },
     { id: 'photo', section: 'hobby', name: '사진 촬영하기', icon: 'camera', tone: 'tone-sky' },
-    { id: 'reading', section: 'hobby', name: '독서', icon: 'book', tone: 'tone-indigo', defaultChecked: true },
+    { id: 'reading', section: 'hobby', name: '독서', icon: 'book', tone: 'tone-indigo' },
     { id: 'basketball', section: 'sports', name: '농구', icon: 'ball', tone: 'tone-amber' },
     { id: 'baseball', section: 'sports', name: '야구 / 소프트볼', icon: 'ball', tone: 'tone-amber' },
     { id: 'soccer', section: 'sports', name: '축구', icon: 'ball', tone: 'tone-emerald' },
@@ -92,7 +92,7 @@ window.OPIC_DATA = {
     { id: 'taekwondo', section: 'sports', name: '태권도', icon: 'sword', tone: 'tone-rose' },
     { id: 'fitness_class', section: 'sports', name: '운동 수업 수강하기', icon: 'list', tone: 'tone-indigo' },
     { id: 'no_exercise', section: 'sports', name: '운동을 전혀 하지 않음', icon: 'ban', tone: 'tone-indigo' },
-    { id: 'biz_domestic', section: 'vacation', name: '국내 출장', icon: 'briefcase', tone: 'tone-indigo' },
+    { id: 'biz_domestic', section: 'vacation', name: '국내 출장', icon: 'briefcase', tone: 'tone-indigo', defaultChecked: true },
     { id: 'biz_abroad', section: 'vacation', name: '해외 출장', icon: 'briefcase', tone: 'tone-indigo' },
     { id: 'vacation_home', section: 'vacation', name: '집에서 보내는 휴가', icon: 'sofa', tone: 'tone-violet', defaultChecked: true },
     { id: 'travel_domestic', section: 'vacation', name: '국내 여행', icon: 'map', tone: 'tone-sky', defaultChecked: true },
@@ -108,6 +108,55 @@ window.OPIC_DATA = {
     { phrase: "At that time, I was totally freaked out!", meaning: "그때 저 진짜 완전 당황했잖아요! (감정 표현 - AL 핵심)" },
     { phrase: "All in all, it was a memorable experience.", meaning: "전반적으로 정말 기억에 남는 경험이었습니다. (마무리 만능)" }
   ],
+
+  // 레벨테스트 3문항 (연습 목록에는 안 나옴). 현재 시제 → 루틴 → 과거 시제 순으로 진단
+  levelTestSet: {
+    id: 'set_leveltest',
+    topicId: 'leveltest',
+    title: '레벨테스트',
+    type: 'leveltest',
+    questions: [
+      {
+        qNum: 1,
+        badge: '자기소개 · 현재 시제',
+        promptEn: "Let's start the interview now. Tell me a little bit about yourself.",
+        promptKo: "인터뷰를 시작할게요. 본인에 대해 간단히 소개해 주세요.",
+        targetSec: 45,
+        tips: "이름(별명), 하는 일, 성격, 요즘 관심사를 4문장 정도로 자연스럽게 이어보세요.",
+        sampleIH: "Hi Eva, nice to meet you. My name is Ji-eun, and I work at a small marketing company in Seoul. I'd say I'm pretty easygoing, and I love trying new cafes with my friends on weekends. These days I'm really into learning English, which is why I'm here today!",
+        keyExpressions: [
+          { en: "I'd say I'm pretty easygoing", ko: "저는 꽤 느긋한 편이에요" },
+          { en: "be really into ~", ko: "~에 푹 빠져 있다" }
+        ]
+      },
+      {
+        qNum: 2,
+        badge: '일상 묘사 · 루틴',
+        promptEn: "What do you usually do on weekends to relax? Tell me about a typical weekend, from the morning until the night.",
+        promptKo: "주말에 쉬려고 주로 무엇을 하나요? 아침부터 밤까지 평소 주말 하루를 말해 주세요.",
+        targetSec: 60,
+        tips: "시간 순서(In the morning → After lunch → At night)로 루틴을 이어가고, 왜 그게 좋은지 한 문장 덧붙이세요.",
+        sampleIH: "Well, on a typical weekend, I usually sleep in until around ten. After a late breakfast, I go for a walk in the park near my place to clear my head. In the afternoon, I often meet my friends at a cozy cafe and we just chat for hours. At night, I like to watch a movie on Netflix with a cup of tea. Honestly, that's the perfect way for me to recharge.",
+        keyExpressions: [
+          { en: "sleep in until around ten", ko: "열 시쯤까지 늦잠 자다" },
+          { en: "that's the perfect way for me to recharge", ko: "그게 제가 재충전하는 가장 좋은 방법이에요" }
+        ]
+      },
+      {
+        qNum: 3,
+        badge: '과거 경험 · 과거 시제',
+        promptEn: "Tell me about something memorable you did recently. What happened, who were you with, and how did you feel about it?",
+        promptKo: "최근에 했던 기억에 남는 일을 말해 주세요. 무슨 일이었고, 누구와 함께였고, 기분은 어땠나요?",
+        targetSec: 60,
+        tips: "과거형 동사(went, had, felt, decided)와 감정 표현(I was so excited / relieved)을 꼭 넣으세요.",
+        sampleIH: "Last month, I went on a short trip to Busan with my best friend. We took the KTX early in the morning, and as soon as we arrived, we headed straight to Haeundae Beach. The weather was amazing, so we just walked along the beach and had some fresh seafood for lunch. To be honest, I was a little exhausted at the end of the day, but looking back, it was one of the most refreshing weekends I've had in a long time.",
+        keyExpressions: [
+          { en: "headed straight to ~", ko: "~로 곧장 갔다" },
+          { en: "looking back, it was ~", ko: "돌이켜보면 ~였다" }
+        ]
+      }
+    ]
+  },
 
   comboSets: [
     {

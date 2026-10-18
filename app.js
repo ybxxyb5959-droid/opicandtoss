@@ -115,6 +115,9 @@
   // 서베이 선택값 정리: 모르는 ID 제거, 옛 ID 이관, 하나만 고르는 파트는 정확히 1개 보장
   function normalizeSurveyIds(ids) {
     const valid = new Set(DATA.surveyTopics.map(t => t.id));
+    const withSets = new Set(DATA.comboSets.flatMap(set => set.topicIds || [set.topicId]));
+    const multi = new Set(DATA.surveySections.filter(sec => !sec.single).map(sec => sec.id));
+    const byId = Object.fromEntries(DATA.surveyTopics.map(t => [t.id, t]));
     let out = [];
     if (!Array.isArray(ids)) {
       out = DATA.surveyTopics.filter(t => t.defaultChecked).map(t => t.id);
@@ -124,7 +127,8 @@
         else if (SURVEY_MIGRATE[id]) out.push(...SURVEY_MIGRATE[id]);
       });
     }
-    out = [...new Set(out)];
+    // 여가·취미·운동·휴가는 연습 문제가 있는 항목만 유지
+    out = [...new Set(out)].filter(id => !multi.has(byId[id].section) || withSets.has(id));
     DATA.surveySections.filter(sec => sec.single).forEach(sec => {
       const items = DATA.surveyTopics.filter(t => t.section === sec.id);
       const chosen = items.filter(t => out.includes(t.id));
@@ -176,6 +180,8 @@
     // 로컬 저장 설정
     selectedSurveyIds: normalizeSurveyIds(readJSON('opic_survey_ids', null)),
     levelTested: localStorage.getItem('opic_level_tested') === '1',
+    studioMode: 'practice', // 'practice' | 'leveltest'
+    levelTestAnswers: [],
     lastSetId: localStorage.getItem('opic_last_set') || null,
     settings: readJSON('opic_settings', null) || {
       targetGrade: 'IM3',
@@ -247,13 +253,7 @@
     practiceList: $('practiceList'),
 
     // 레벨테스트
-    btnListenLevelTestQ: $('btnListenLevelTestQ'),
-    levelTestPromptEn: $('levelTestPromptEn'),
-    btnStartLevelTestRec: $('btnStartLevelTestRec'),
-    btnStopLevelTestRec: $('btnStopLevelTestRec'),
-    levelTestStatusText: $('levelTestStatusText'),
-    levelTestTranscript: $('levelTestTranscript'),
-    levelTestResultBox: $('levelTestResultBox'),
+    btnStartLevelTest: $('btnStartLevelTest'),
 
     // 설정(서베이/난이도/티어)
     tierCards: document.querySelectorAll('#tierCardGrid .tier-card'),
@@ -477,6 +477,7 @@
   // --- 화면(뷰) 전환 ---
   function navigateTo(viewId) {
     stopAllAudioAndTimers();
+    if (state.currentView === 'studio' && viewId !== 'studio') leaveLevelTestMode();
     if (TAB_VIEWS.includes(state.currentView)) state.returnView = state.currentView;
     state.currentView = viewId;
     const immersive = !TAB_VIEWS.includes(viewId);
@@ -506,6 +507,7 @@
   }
 
   function rememberCurrentSet() {
+    if (state.studioMode === 'leveltest') return;
     state.lastSetId = getCurrentSet().id;
     localStorage.setItem('opic_last_set', state.lastSetId);
     renderHomeSummary();
@@ -565,7 +567,7 @@
       els.heroRoadmapCoach.innerHTML = `
         <div class="coach-title">${icon('target')}지금 내 등급부터 확인해요</div>
         1분만 말해보면 예상 등급과 <strong>${target}까지 남은 거리</strong>를 보여드려요.
-        <button class="btn btn-primary btn-sm lock-cta" data-go="leveltest">${icon('mic')}1분 레벨테스트 하기</button>`;
+        <button class="btn btn-primary btn-sm lock-cta" data-go="leveltest">${icon('mic')}레벨테스트 하기 (3분)</button>`;
     }
 
     els.tierCards.forEach(card => {
@@ -667,7 +669,7 @@
       </div>
       <div class="survey-progress-track"><div class="survey-progress-fill" style="width:${Math.min(100, (n / SURVEY_MIN) * 100)}%"></div></div>
       <div class="survey-progress-foot">
-        <span>자기소개 · 롤플레이 · 돌발은 항상 나와요 · <span class="dot-legend"></span> 연습 문제 있음</span>
+        <span>자기소개 · 롤플레이 · 돌발은 항상 나와요 · <span class="dot-legend"></span> 추천(선택 가능) · 흐린 항목은 준비 중</span>
         <button type="button" class="link-btn" data-action="survey-recommend">${icon('sparkles')}추천 12개로 맞추기</button>
       </div>`;
     container.appendChild(progress);
@@ -699,10 +701,12 @@
       grid.className = 'survey-chip-grid';
       items.forEach(topic => {
         const isSel = state.selectedSurveyIds.includes(topic.id);
+        const soon = !sec.single && !topicsWithSets.has(topic.id);
         const chip = document.createElement('button');
         chip.type = 'button';
-        chip.className = `survey-chip ${isSel ? 'selected' : ''} ${topicsWithSets.has(topic.id) ? 'has-q' : ''}`;
+        chip.className = `survey-chip ${isSel ? 'selected' : ''} ${topicsWithSets.has(topic.id) ? 'has-q' : ''} ${soon ? 'soon' : ''}`;
         chip.setAttribute('aria-pressed', isSel);
+        if (soon) { chip.disabled = true; chip.title = '연습 문제 준비 중'; }
         chip.innerHTML = `${topicTile(topic.id, 'xs')}<span>${esc(topic.name)}</span><span class="chip-check">${icon('check')}</span>`;
         chip.onclick = () => {
           if (sec.single) {
@@ -757,6 +761,8 @@
   }
 
   function filterActiveSetsBySurvey() {
+    state.studioMode = 'practice';
+    document.body.classList.remove('is-leveltest');
     let filtered = DATA.comboSets.filter(setMatchesSurvey);
     if (filtered.length === 0) filtered = [...DATA.comboSets];
     state.activeSets = filtered;
@@ -766,6 +772,8 @@
 
   // 라이브러리에서 고른 세트는 서베이와 무관하게 전체 세트 기준으로 연습
   function useAllSets() {
+    state.studioMode = 'practice';
+    document.body.classList.remove('is-leveltest');
     state.activeSets = [...DATA.comboSets];
   }
 
@@ -1013,7 +1021,7 @@
     }
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const targetTextarea = mode === 'leveltest' ? els.levelTestTranscript : els.liveTranscriptInput;
+    const targetTextarea = els.liveTranscriptInput;
 
     if (!SpeechRecognition) {
       showToast('실시간 음성 인식은 Chrome·Edge에서만 돼요. 직접 입력해도 분석할 수 있어요');
@@ -1038,14 +1046,8 @@
           }
         }
         state.interimTranscript = interim;
-        if (mode === 'studio') {
-          els.sttInterimPreview.textContent = interim ? `“${interim}…”` : '';
-          updateLiveMetrics();
-        } else {
-          els.levelTestStatusText.textContent = interim
-            ? `인식 중 · “${interim}…”`
-            : `녹음 중 · ${state.recordingSeconds}초`;
-        }
+        els.sttInterimPreview.textContent = interim ? `“${interim}…”` : '';
+        updateLiveMetrics();
       };
 
       state.recognition.onend = () => {
@@ -1078,16 +1080,6 @@
         els.timeProgressBar.style.width = `${pct}%`;
         els.timeProgressBar.classList.toggle('over', pct >= 100);
         updateLiveMetrics();
-      }, 1000);
-    } else {
-      els.btnStartLevelTestRec.disabled = true;
-      els.btnStopLevelTestRec.disabled = false;
-      els.levelTestStatusText.textContent = '녹음 중 · 30~60초 정도 말해보세요';
-      state.recordingTimerId = setInterval(() => {
-        state.recordingSeconds += 1;
-        if (!state.interimTranscript) {
-          els.levelTestStatusText.textContent = `녹음 중 · ${state.recordingSeconds}초 경과`;
-        }
       }, 1000);
     }
   }
@@ -1134,15 +1126,12 @@
       els.sttInterimPreview.textContent = '';
       updateLiveMetrics();
       savePracticeHistoryItem();
-      if (els.liveTranscriptInput.value.trim().length > 0) {
+      if (state.studioMode === 'leveltest') {
+        recordLevelTestAnswer();
+      } else if (els.liveTranscriptInput.value.trim().length > 0) {
         runAiCoaching();
         setTimeout(() => els.btnRunAiCoach.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
       }
-    } else {
-      els.btnStartLevelTestRec.disabled = false;
-      els.btnStopLevelTestRec.disabled = true;
-      els.levelTestStatusText.textContent = '분석 완료!';
-      evaluateLevelTestResult();
     }
   }
 
@@ -1494,62 +1483,118 @@
       <div class="coach-note">${m.roadmapToIM3}</div>`;
   }
 
-  // --- 1분 레벨 테스트 진단 결과 ---
-  function evaluateLevelTestResult() {
-    const text = els.levelTestTranscript.value.trim();
-    if (!text) {
-      showToast('인식된 문장이 없어요. 다시 말하거나 직접 입력해 주세요');
+  // --- 레벨테스트: 스튜디오를 '레벨테스트 모드'로 돌린다 (3문항) ---
+  function startLevelTest() {
+    state.studioMode = 'leveltest';
+    state.levelTestAnswers = [];
+    state.activeSets = [DATA.levelTestSet];
+    document.body.classList.add('is-leveltest');
+    openStudio({ setIndex: 0, autoPlay: true });
+  }
+
+  function leaveLevelTestMode() {
+    if (state.studioMode !== 'leveltest') return;
+    state.studioMode = 'practice';
+    document.body.classList.remove('is-leveltest');
+    filterActiveSetsBySurvey();
+    restoreLastSet();
+  }
+
+  // 답변 하나 끝날 때마다 저장. 마지막 문항이면 바로 진단
+  function recordLevelTestAnswer() {
+    const text = els.liveTranscriptInput.value.trim();
+    const seconds = state.recordingSeconds || 0;
+    const q = getCurrentQuestion();
+    const total = getCurrentSet().questions.length;
+    state.levelTestAnswers[state.currentQIndex] = text
+      ? { badge: q.badge, text, seconds, m: analyzeTranscriptMetrics(text, seconds || 45) }
+      : null;
+    if (state.currentQIndex >= total - 1) {
+      finishLevelTest();
+    } else {
+      const done = state.levelTestAnswers.filter(Boolean).length;
+      els.evaStatusPill.textContent = text
+        ? `${done}/${total} 저장했어요. "다음 문제"를 눌러 이어가세요`
+        : '인식된 문장이 없어요. 다시 답변하거나 다음 문제로 넘어가세요';
+    }
+  }
+
+  function tierForGrade(grade) {
+    if (grade === 'IL') return 'beginner0';
+    if (grade === 'IM1' || grade === 'IM2') return 'beginner';
+    if (grade === 'IM3') return 'intermediate';
+    return 'advanced';
+  }
+
+  function finishLevelTest() {
+    const answers = state.levelTestAnswers.filter(Boolean);
+    if (answers.length === 0) {
+      showToast('답변이 하나도 없어요. 다시 답변해 주세요');
       return;
     }
+    const total = getCurrentSet().questions.length;
 
-    const m = analyzeTranscriptMetrics(text, state.recordingSeconds || 45);
-    const detectedGrade = m.estGrade === '-' ? 'IL' : m.estGrade;
+    // 문항별 등급의 평균 → 과거 시제 문항에서 과거형 동사가 없으면 IM2 이하로 제한
+    const ranks = answers.map(x => Math.max(0, gradeRank(x.m.estGrade)));
+    let rank = Math.round(ranks.reduce((s, r) => s + r, 0) / ranks.length);
+    const pastAnswer = state.levelTestAnswers[total - 1];
+    const noPast = !!pastAnswer && pastAnswer.m.pastVerbCount === 0;
+    if (noPast) rank = Math.min(rank, gradeRank('IM2'));
+    const grade = GRADE_ORDER[rank];
 
-    let matchedTier = 'beginner';
-    if (detectedGrade === 'IL') matchedTier = 'beginner0';
-    else if (detectedGrade === 'IM1' || detectedGrade === 'IM2') matchedTier = 'beginner';
-    else if (detectedGrade === 'IM3') matchedTier = 'intermediate';
-    else if (detectedGrade === 'IH' || detectedGrade === 'AL') matchedTier = 'advanced';
+    const avgWords = Math.round(answers.reduce((s, x) => s + x.m.wordCount, 0) / answers.length);
+    const avgWpm = Math.round(answers.reduce((s, x) => s + x.m.wpm, 0) / answers.length);
+    const fillers = answers.reduce((s, x) => s + x.m.fillerCount, 0);
+    const pastVerbs = answers.reduce((s, x) => s + x.m.pastVerbCount, 0);
+    const longest = answers.reduce((b, x) => (x.m.wordCount > b.m.wordCount ? x : b), answers[0]);
+    const agg = { wordCount: avgWords, wpm: avgWpm, fillerCount: fillers, pastVerbCount: pastVerbs, roadmapToIM3: longest.m.roadmapToIM3 };
 
-    state.userTier = matchedTier;
-    state.currentGrade = detectedGrade;
+    const tier = tierForGrade(grade);
+    state.userTier = tier;
+    state.currentGrade = grade;
     state.levelTested = true;
-    localStorage.setItem('opic_user_tier', state.userTier);
-    localStorage.setItem('opic_current_grade', state.currentGrade);
+    localStorage.setItem('opic_user_tier', tier);
+    localStorage.setItem('opic_current_grade', grade);
     localStorage.setItem('opic_level_tested', '1');
     renderUserTierAndRoadmap();
 
-    const p = TIER_PRESETS[matchedTier];
-    els.levelTestResultBox.style.display = 'block';
-    els.levelTestResultBox.innerHTML = `
-      ${resultHeadHtml(detectedGrade, '진단 예상 등급', m, 'indigo')}
-      <p class="sub" style="margin-top:0.8rem;">추천 코스: <strong>${p.name} (난이도 ${p.difficulty}단계)</strong> 로 홈 로드맵을 맞췄어요.</p>
+    const notes = [];
+    if (avgWords < 65) notes.push(`답변이 평균 <strong>${avgWords}단어</strong>예요. 문항당 70단어(약 50초)를 목표로 한 문장씩 더 붙여보세요.`);
+    if (fillers < 2) notes.push('연결어가 거의 없어요. <code>Actually</code> <code>To be honest</code> <code>First of all</code>을 문장 앞에 붙여보세요.');
+    if (noPast) notes.push('과거 경험 문항에 <strong>과거형 동사</strong>가 없었어요. <code>went</code> <code>had</code> <code>felt</code>처럼 과거형으로 말해야 IM3 이상이 돼요.');
+    else if (pastVerbs < 3) notes.push('과거형 동사를 조금 더 자주 쓰면 과거 경험 문항 점수가 올라가요.');
+    if (avgWpm >= 90 && avgWords >= 65) notes.push('말하기 속도와 길이가 좋아요. 감정 표현(I was so relieved)을 섞으면 IH가 보여요.');
+    if (answers.length < total) notes.push(`${total - answers.length}문항은 답변이 없어 진단에서 뺐어요.`);
+
+    const rows = getCurrentSet().questions.map((q, i) => {
+      const x = state.levelTestAnswers[i];
+      return `
+        <div class="lt-row">
+          <span class="lt-row-q">Q${i + 1}</span>
+          <span class="li-body">
+            <span class="li-title">${esc(q.badge)}</span>
+            <span class="li-sub">${x ? `${x.m.wordCount}단어 · ${formatTime(x.seconds)} · 연결어 ${x.m.fillerCount} · 과거동사 ${x.m.pastVerbCount}` : '답변 없음'}</span>
+          </span>
+          <span class="grade-pill ${x ? '' : 'muted'}">${x ? esc(x.m.estGrade) : '-'}</span>
+        </div>`;
+    }).join('');
+
+    const p = TIER_PRESETS[tier];
+    els.aiFeedbackContainer.innerHTML = `
+      ${resultHeadHtml(grade, '레벨테스트 진단 등급', agg, 'indigo')}
+      <div class="result-section">
+        <div class="result-section-title"><span>문항별 결과</span></div>
+        <div class="lt-rows">${rows}</div>
+      </div>
+      ${notes.length ? `<div class="result-section"><div class="result-section-title"><span>이렇게 하면 올라가요</span></div><ul class="lt-notes">${notes.map(n => `<li>${n}</li>`).join('')}</ul></div>` : ''}
+      <p class="sub" style="margin-top:0.9rem;">홈 로드맵을 <strong>${p.name} 코스(난이도 ${p.difficulty}단계)</strong>에 맞췄어요. 간이 진단이라 실제 등급과 다를 수 있어요.</p>
       <div class="result-actions">
         <button class="btn btn-ghost" data-action="go-home">홈으로</button>
         <button class="btn btn-primary" data-action="go-setup">서베이 고르기</button>
       </div>`;
-    els.levelTestResultBox.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-
-  function startLevelTestListenFlow() {
-    stopAllAudioAndTimers();
-    const qText = els.levelTestPromptEn.textContent.trim();
-    els.levelTestStatusText.textContent = '에바가 진단 질문을 읽고 있어요…';
-    speakEnglishText(qText, () => {
-      if (state.currentView !== 'leveltest') return;
-      let sec = 5;
-      els.levelTestStatusText.textContent = `${sec}초 뒤 녹음이 시작돼요`;
-      state.prepTimerId = setInterval(() => {
-        sec -= 1;
-        if (sec > 0) {
-          els.levelTestStatusText.textContent = `${sec}초 뒤 녹음이 시작돼요`;
-        } else {
-          clearInterval(state.prepTimerId);
-          playBeepSound(880, 200);
-          startAnswering('leveltest');
-        }
-      }, 1000);
-    });
+    showResultTab('coach');
+    els.evaStatusPill.textContent = '진단 완료! 아래에서 결과를 확인하세요';
+    setTimeout(() => els.aiFeedbackContainer.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
   }
 
   // --- 콤보 세트 및 질문 렌더링 ---
@@ -1579,7 +1624,10 @@
     const q = getCurrentQuestion();
 
     els.comboSetSelect.value = state.currentSetIndex;
-    els.studioSetTitle.innerHTML = `${topicTile(set.topicId, 'xs')}${esc(splitSetTitle(set.title).main)}`;
+    els.studioSetTitle.innerHTML = state.studioMode === 'leveltest'
+      ? `<span class="icon-tile xs tone-indigo">${icon('target', 'ic')}</span>레벨테스트 ${state.currentQIndex + 1}/${set.questions.length}`
+      : `${topicTile(set.topicId, 'xs')}${esc(splitSetTitle(set.title).main)}`;
+    els.studioSetTitleBtn.disabled = state.studioMode === 'leveltest';
     setFlowStepBadge('listen');
     setStudioPhase('idle');
     els.evaStatusPill.textContent = '재생 버튼을 누르면 듣기 → 준비 → 녹음이 자동으로 이어져요';
@@ -2078,9 +2126,7 @@
     };
 
     // 레벨테스트
-    els.btnListenLevelTestQ.onclick = startLevelTestListenFlow;
-    els.btnStartLevelTestRec.onclick = () => startAnswering('leveltest');
-    els.btnStopLevelTestRec.onclick = () => stopAnswering();
+    els.btnStartLevelTest.onclick = startLevelTest;
 
     // 스튜디오
     els.studioSetTitleBtn.onclick = openSetSheet;
@@ -2120,6 +2166,9 @@
       const set = getCurrentSet();
       if (state.currentQIndex + 1 < set.questions.length) {
         state.currentQIndex += 1;
+      } else if (state.studioMode === 'leveltest') {
+        finishLevelTest();
+        return;
       } else {
         state.currentSetIndex = (state.currentSetIndex + 1) % state.activeSets.length;
         state.currentQIndex = 0;
