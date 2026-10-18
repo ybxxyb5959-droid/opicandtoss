@@ -636,27 +636,71 @@
     renderDifficultyCards();
   }
 
+  const SURVEY_MIN = 12; // 실제 시험: Part 4~7에서 12개 이상
+  const openSurveyParts = new Set();
+
+  function applyRecommendedSurvey() {
+    state.selectedSurveyIds = normalizeSurveyIds(null);
+    localStorage.setItem('opic_survey_ids', JSON.stringify(state.selectedSurveyIds));
+    renderSurveyScreen();
+    renderUserTierAndRoadmap();
+    renderPracticeList();
+    showToast(`추천 조합 ${multiSurveyCount()}개로 맞췄어요`);
+  }
+
+  function surveyShortName(t) {
+    return t.name.replace(/\s*\(.*\)$/, '').split(' / ')[0];
+  }
+
   function renderSurveyChips(container) {
     container.innerHTML = '';
+    const n = multiSurveyCount();
+    const ok = n >= SURVEY_MIN;
 
-    const note = document.createElement('div');
-    note.className = 'survey-note';
-    note.innerHTML = `${icon('sparkles')}<span><strong>자기소개 · 롤플레이 · 돌발 주제</strong>는 서베이와 상관없이 항상 나와요. <span class="dot-legend"></span> 표시는 지금 연습 문제가 있는 항목이에요.</span>`;
-    container.appendChild(note);
+    // 12개 규칙 진행 표시
+    const progress = document.createElement('div');
+    progress.className = `survey-progress ${ok ? 'ok' : ''}`;
+    progress.innerHTML = `
+      <div class="survey-progress-row">
+        <span class="survey-progress-title">${icon(ok ? 'check' : 'target')}Part 4~7에서 ${SURVEY_MIN}개 이상</span>
+        <span class="survey-progress-count">지금 <strong>${n}</strong>개${ok ? '' : ` · ${SURVEY_MIN - n}개 더`}</span>
+      </div>
+      <div class="survey-progress-track"><div class="survey-progress-fill" style="width:${Math.min(100, (n / SURVEY_MIN) * 100)}%"></div></div>
+      <div class="survey-progress-foot">
+        <span>자기소개 · 롤플레이 · 돌발은 항상 나와요 · <span class="dot-legend"></span> 연습 문제 있음</span>
+        <button type="button" class="link-btn" data-action="survey-recommend">${icon('sparkles')}추천 12개로 맞추기</button>
+      </div>`;
+    container.appendChild(progress);
 
     DATA.surveySections.forEach(sec => {
       const items = DATA.surveyTopics.filter(t => t.section === sec.id);
-      const label = document.createElement('div');
-      label.className = 'survey-category-label';
-      label.innerHTML = `${esc(sec.name)}<span class="survey-hint">${sec.single ? '하나만' : '여러 개'}</span>`;
-      container.appendChild(label);
+      const chosen = items.filter(t => state.selectedSurveyIds.includes(t.id));
+      const preview = chosen.length
+        ? chosen.slice(0, 3).map(surveyShortName).join(', ') + (chosen.length > 3 ? ` 외 ${chosen.length - 3}개` : '')
+        : '아직 안 골랐어요';
+
+      const part = document.createElement('details');
+      part.className = 'survey-part';
+      part.open = openSurveyParts.has(sec.id);
+      part.innerHTML = `
+        <summary class="survey-part-head">
+          <span class="survey-part-body">
+            <span class="survey-part-name">${esc(sec.name)}<span class="survey-hint">${sec.single ? '하나만' : '여러 개'}</span></span>
+            <span class="survey-part-preview">${esc(preview)}</span>
+          </span>
+          <span class="survey-part-count ${!sec.single && chosen.length ? 'on' : ''}">${sec.single ? '' : chosen.length + '개'}</span>
+          ${icon('down', 'ic ic-sm survey-part-chev')}
+        </summary>`;
+      part.addEventListener('toggle', () => {
+        if (part.open) openSurveyParts.add(sec.id); else openSurveyParts.delete(sec.id);
+      });
 
       const grid = document.createElement('div');
       grid.className = 'survey-chip-grid';
-
       items.forEach(topic => {
         const isSel = state.selectedSurveyIds.includes(topic.id);
         const chip = document.createElement('button');
+        chip.type = 'button';
         chip.className = `survey-chip ${isSel ? 'selected' : ''} ${topicsWithSets.has(topic.id) ? 'has-q' : ''}`;
         chip.setAttribute('aria-pressed', isSel);
         chip.innerHTML = `${topicTile(topic.id, 'xs')}<span>${esc(topic.name)}</span><span class="chip-check">${icon('check')}</span>`;
@@ -668,7 +712,7 @@
             state.selectedSurveyIds.push(topic.id);
           } else if (isSel) {
             if (multiSurveyCount() <= 1) {
-              showToast('여가·취미·운동·휴가에서 1개 이상은 골라주세요');
+              showToast('Part 4~7에서 1개 이상은 골라주세요');
               return;
             }
             state.selectedSurveyIds = state.selectedSurveyIds.filter(id => id !== topic.id);
@@ -682,8 +726,8 @@
         };
         grid.appendChild(chip);
       });
-
-      container.appendChild(grid);
+      part.appendChild(grid);
+      container.appendChild(part);
     });
   }
 
@@ -1697,6 +1741,7 @@
       showToast('모범답안을 불러왔어요. 소리 내어 읽어보세요');
     } else if (action === 'delete-note') deleteNote(id);
     else if (action === 'play-take') toggleTakePlayer(id, btn);
+    else if (action === 'survey-recommend') applyRecommendedSurvey();
     else if (action === 'delete-history') { if (confirm('이 기록과 녹음을 삭제할까요?')) deleteHistoryItem(id); }
     else if (action === 'ob-tier') { ob.tier = id; ob.target = TIER_PRESETS[id].targetGrade; renderObTiers(); }
     else if (action === 'ob-target') { ob.target = id; renderObTargets(); }
@@ -2008,6 +2053,8 @@
     });
 
     els.btnConfirmSurveyStartInterview.onclick = () => {
+      const n = multiSurveyCount();
+      if (n < SURVEY_MIN && !confirm(`실제 시험은 Part 4~7에서 12개 이상 골라요. 지금은 ${n}개인데 이대로 시작할까요?`)) return;
       filterActiveSetsBySurvey();
       openStudio({ autoPlay: true });
       showToast('선택한 서베이와 난이도로 시작할게요');
@@ -2191,7 +2238,11 @@
     // 온보딩
     els.obBackBtn.onclick = () => obGo(ob.step - 1);
     els.obNextBtn.onclick = () => {
-      if (ob.step === 3 && multiSurveyCount() === 0) return showToast('여가·취미·운동·휴가에서 1개 이상 골라주세요');
+      if (ob.step === 3) {
+        const n = multiSurveyCount();
+        if (n === 0) return showToast('Part 4~7에서 1개 이상 골라주세요');
+        if (n < SURVEY_MIN && !confirm(`실제 시험은 Part 4~7에서 12개 이상 골라요. 지금은 ${n}개인데 이대로 갈까요?`)) return;
+      }
       if (ob.step >= OB_STEP_COUNT - 1) finishOnboarding(true);
       else obGo(ob.step + 1);
     };
