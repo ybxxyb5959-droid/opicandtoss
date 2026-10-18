@@ -200,6 +200,7 @@
     aiLimit: null,
     aiMember: false,
     followup: null, // 에바 꼬리질문 { en, ko } (답하는 중)
+    awaitTranscribe: null, // 음성 인식이 비었을 때: 녹음 파일로 글자 변환 대기 { timer }
     stories: readJSON('opic_stories', []),
     notePane: 'notes',
     review: null, // { queue:[], idx, flipped }
@@ -1410,18 +1411,73 @@
       updateLiveMetrics();
       if (discard) return;
       savePracticeHistoryItem();
-      if (state.studioMode === 'leveltest') {
-        recordLevelTestAnswer();
-      } else if (state.studioMode === 'mock') {
-        recordMockAnswer();
-      } else if (els.liveTranscriptInput.value.trim().length > 0) {
-        runAiCoaching();
-        setTimeout(() => els.btnRunAiCoach.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
-      } else {
-        els.evaStatusPill.textContent = '인식된 문장이 없어요. 녹음은 저장됐어요';
-        showSttNotice('인식된 문장이 없어서 등급을 못 매겼어요. <strong>조금 더 크고 또렷하게</strong> 다시 답변해 보세요. 마이크 권한도 확인해 주세요.');
+      const hasText = els.liveTranscriptInput.value.trim().length > 0;
+      const willHaveAudio = !!(state.mediaRecorder && state.audioChunks && (state.audioChunks.length > 0 || state.recordingSeconds >= 2));
+      if (!hasText && willHaveAudio && aiEnabled() && state.recordingSeconds >= 2) {
+        // 음성 인식이 비었음 → 녹음 파일이 준비되면 Gemini로 글자 변환 후 이어서 처리
+        els.evaStatusPill.textContent = '음성을 글자로 옮기고 있어요… (몇 초)';
+        showSttNotice(`${icon('sparkles', 'ic ic-sm')} 이 브라우저의 음성 인식이 비어 있어서, <strong>녹음 파일을 AI로 받아 적는 중</strong>이에요. 잠시만요.`);
+        clearTimeout(state.awaitTranscribe && state.awaitTranscribe.timer);
+        state.awaitTranscribe = { timer: setTimeout(() => { if (state.awaitTranscribe) { state.awaitTranscribe = null; handleAnswerFinished(); } }, 12000) };
+        return;
       }
+      handleAnswerFinished();
     }
+  }
+
+  // 답변이 끝난 뒤 모드별 처리 (스크립트가 확정된 시점에 호출)
+  function handleAnswerFinished() {
+    if (state.studioMode === 'leveltest') {
+      recordLevelTestAnswer();
+    } else if (state.studioMode === 'mock') {
+      recordMockAnswer();
+    } else if (els.liveTranscriptInput.value.trim().length > 0) {
+      els.sttNotice.hidden = true;
+      runAiCoaching();
+      setTimeout(() => els.btnRunAiCoach.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
+    } else {
+      els.evaStatusPill.textContent = '인식된 문장이 없어요. 녹음은 저장됐어요';
+      showSttNotice('인식된 문장이 없어서 등급을 못 매겼어요. <strong>조금 더 크고 또렷하게</strong> 다시 답변해 보세요. 마이크 권한도 확인해 주세요.');
+    }
+  }
+
+  // 녹음 파일 → Gemini 받아쓰기 (브라우저 음성 인식이 안 될 때의 2차 안전장치)
+  function blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result).split(',')[1] || '');
+      r.onerror = reject;
+      r.readAsDataURL(blob);
+    });
+  }
+
+  async function transcribeBlob(blob, mimeType) {
+    const waiting = state.awaitTranscribe;
+    if (!waiting) return;
+    clearTimeout(waiting.timer);
+    state.awaitTranscribe = null;
+    const q = getCurrentQuestion();
+    try {
+      const data = await blobToBase64(blob);
+      const r = await aiCall('/transcribe', { audio: { data, mimeType }, promptEn: state.followup ? state.followup.en : q.promptEn });
+      const text = r.ok ? String(r.data.transcript || '').trim() : '';
+      if (text) {
+        els.liveTranscriptInput.value = text;
+        state.finalTranscript = text + ' ';
+        updateLiveMetrics();
+        const m = analyzeTranscriptMetrics(text, state.recordingSeconds || 45);
+        fillLastHistoryTranscript(text, m);
+        const item = state.history.find(x => x.id === state.lastHistoryId);
+        if (item && item.takeId) takes.get(item.takeId).then(t => { if (t) { t.transcript = text; t.metrics = { wordCount: m.wordCount, wpm: m.wpm, fillerCount: m.fillerCount, estGrade: m.estGrade }; return takes.put(t); } }).catch(() => {});
+        els.sttNotice.hidden = true;
+        showToast('녹음을 AI가 받아 적었어요');
+      } else if (!r.ok) {
+        showSttNotice(`받아쓰기를 못 했어요: ${esc(aiErrorKo(r.error))}`);
+      }
+    } catch (_) {
+      showSttNotice('받아쓰기 중 문제가 생겼어요. 다시 답변해 보세요.');
+    }
+    handleAnswerFinished();
   }
 
   function stopAllAudioAndTimers() {
@@ -1482,6 +1538,11 @@
             pendingTake.mimeType = actualMime;
             commitPendingTake();
           }
+          if (state.awaitTranscribe) transcribeBlob(blob, actualMime);
+        } else if (state.awaitTranscribe) {
+          clearTimeout(state.awaitTranscribe.timer);
+          state.awaitTranscribe = null;
+          handleAnswerFinished();
         }
       };
       state.mediaRecorder.start();
@@ -3453,6 +3514,7 @@
 
   // 모르는 문제 건너뛰기: 녹음·저장 없이 다음 문제로 (모의고사·레벨테스트에서는 '답변 없음'으로 남음)
   function skipQuestion() {
+    if (state.awaitTranscribe) { clearTimeout(state.awaitTranscribe.timer); state.awaitTranscribe = null; }
     if (state.isRecording) stopAnswering({ discard: true });
     stopAllAudioAndTimers();
     if (state.studioMode === 'mock' && state.mock) state.mock.answers[state.currentQIndex] = null;

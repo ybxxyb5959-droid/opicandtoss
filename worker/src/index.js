@@ -5,6 +5,7 @@
 //   POST /followup              꼬리 질문 1개
 //   POST /draft                 내 이야기로 답변 초안
 //   POST /diagnose              레벨테스트 3문항 종합 진단
+//   POST /transcribe           녹음 파일(base64) → 영어 스크립트 (브라우저 음성 인식이 안 될 때)
 // 요청 공통: { deviceId, inviteCode? }  응답 공통: { ..., remainingToday }
 // 모델: MODELS 순서대로 시도(429/5xx면 다음). 모두 실패하면 { error } 로 알려 앱이 내장 코치로 전환한다.
 
@@ -40,6 +41,7 @@ export default {
       else if (url.pathname === '/followup') task = buildFollowup(body);
       else if (url.pathname === '/draft') task = buildDraft(body);
       else if (url.pathname === '/diagnose') task = buildDiagnose(body);
+      else if (url.pathname === '/transcribe') task = buildTranscribe(body);
       else return json({ error: 'not_found' }, 404, cors);
       if (task.error) return json({ error: task.error }, 400, cors);
 
@@ -120,7 +122,7 @@ async function callGemini(env, task) {
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY },
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: task.system }] },
-          contents: [{ role: 'user', parts: [{ text: task.user }] }],
+          contents: [{ role: 'user', parts: task.parts || [{ text: task.user }] }],
           generationConfig: {
             temperature: 0.4,
             maxOutputTokens: 1400,
@@ -162,6 +164,33 @@ The transcript comes from speech recognition, so ignore missing punctuation and 
 Write all Korean text (fields ending in Ko) in warm, simple Korean (해요체), short sentences, no jargon.`;
 
 function clean(s, max) { return String(s || '').replace(/\s+/g, ' ').trim().slice(0, max); }
+
+// 브라우저 녹음 MIME → Gemini가 받는 MIME
+const MAX_AUDIO_B64 = 9 * 1024 * 1024; // ~6.7MB 원본
+function audioPart(audio) {
+  if (!audio || !audio.data) return null;
+  if (String(audio.data).length > MAX_AUDIO_B64) return { error: 'audio_too_large' };
+  let mime = String(audio.mimeType || 'audio/webm').split(';')[0].trim().toLowerCase();
+  if (mime === 'audio/mp4' || mime === 'audio/x-m4a' || mime === 'audio/aac') mime = 'audio/m4a';
+  if (mime === 'audio/mpeg') mime = 'audio/mp3';
+  if (!['audio/webm', 'audio/m4a', 'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/flac', 'audio/aiff', 'audio/opus'].includes(mime)) mime = 'audio/webm';
+  return { inlineData: { mimeType: mime, data: audio.data } };
+}
+
+function buildTranscribe(b) {
+  const part = audioPart(b.audio);
+  if (!part) return { error: 'audio_missing' };
+  if (part.error) return { error: part.error };
+  return {
+    system: 'You are a precise speech-to-text engine for English learners. Transcribe exactly what is said, in English, including small grammar mistakes and filler words (um, uh). Do not correct, translate, or add anything. If nothing intelligible is spoken, return an empty string.',
+    parts: [part, { text: `Transcribe this spoken answer to the OPIc question "${clean(b.promptEn, 400)}". Return JSON with "transcript" (the exact words) and "spoken" (true if any English speech was detected).` }],
+    schema: {
+      type: 'OBJECT',
+      properties: { transcript: { type: 'STRING' }, spoken: { type: 'BOOLEAN' } },
+      required: ['transcript', 'spoken']
+    }
+  };
+}
 
 function buildCoach(b) {
   const transcript = clean(b.transcript, MAX_TRANSCRIPT);
