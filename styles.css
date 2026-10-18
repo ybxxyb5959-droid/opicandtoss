@@ -981,9 +981,9 @@ body.is-leveltest #studioSetTitleBtn .ic { display: none; }
 .lt-loading { text-align: center; padding: 2rem 0; }
 .lt-loading .h2 { margin-top: 1.4rem; font-size: 1.3rem; }
 .lt-loading .sub { min-height: 1.5em; }
-.lt-spinner { position: relative; width: 132px; height: 132px; margin: 0 auto; display: grid; place-items: center; }
-.lt-spinner::before { content: ''; position: absolute; inset: 0; border-radius: 50%; border: 5px solid var(--surface-3); }
-.lt-spinner::after { content: ''; position: absolute; inset: 0; border-radius: 50%; border: 5px solid transparent; border-top-color: var(--primary); border-right-color: var(--primary); animation: ltSpin 1s linear infinite; }
+.lt-spinner { position: relative; width: 84px; height: 84px; margin: 0 auto; }
+.lt-spinner::before { content: ''; position: absolute; inset: 0; border-radius: 50%; border: 6px solid var(--surface-3); }
+.lt-spinner::after { content: ''; position: absolute; inset: 0; border-radius: 50%; border: 6px solid transparent; border-top-color: var(--primary); animation: ltSpin 0.9s linear infinite; }
 @keyframes ltSpin { to { transform: rotate(360deg); } }
 .lt-dots { display: flex; justify-content: center; gap: 8px; margin-top: 1.2rem; }
 .lt-dots span { width: 8px; height: 8px; border-radius: 50%; background: var(--surface-3); transition: background 0.3s; }
@@ -1046,3 +1046,11 @@ body.is-exam-view .switch-row.on-dark { display: none; }
 .stt-notice { display: flex; align-items: flex-start; gap: 0.45rem; margin-top: 0.6rem; padding: 0.7rem 0.8rem; border-radius: var(--r-md); background: var(--amber-soft); color: var(--text-2); font-size: 0.82rem; line-height: 1.55; }
 .stt-notice .ic { color: var(--amber); flex-shrink: 0; margin-top: 0.1rem; }
 .stt-notice strong { color: var(--text); }
+
+/* 기록: 주간 요약 */
+.week-row { grid-template-columns: repeat(3, 1fr); padding: 0.9rem 0.3rem 0.8rem; }
+.week-row .stat-val { font-size: 1.3rem; }
+.stat-delta { font-size: 0.66rem; font-weight: 650; margin-top: 0.15rem; text-align: center; padding: 0 0.2rem; }
+.stat-delta.up { color: var(--emerald); }
+.stat-delta.down { color: var(--rose); }
+.stat-delta.muted { color: var(--text-3); }

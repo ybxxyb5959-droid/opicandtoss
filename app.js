@@ -349,6 +349,7 @@
 
     historyCountBadge: $('historyCountBadge'),
     takeCountChip: $('takeCountChip'),
+    historyWeek: $('historyWeek'),
     historyChart: $('historyChart'),
     historyListContainer: $('historyListContainer'),
     btnClearHistory: $('btnClearHistory'),
@@ -1749,7 +1750,7 @@
     // 1) 로딩 연출
     openLevelTestSheet(`
       <div class="lt-loading">
-        <div class="lt-spinner"><span class="eva-art"><svg viewBox="0 0 104 104"><use href="#i-eva"/></svg></span></div>
+        <div class="lt-spinner" aria-hidden="true"></div>
         <h2 class="h2">등급을 확인하고 있어요</h2>
         <p class="sub" id="ltLoadingStep">${LT_LOADING_STEPS[0]}</p>
         <div class="lt-dots"><span></span><span></span><span></span></div>
@@ -2200,8 +2201,43 @@
       <div class="trend-axis"><span>${esc(recent[0].estGrade)}</span><span>최근 ${esc(recent[recent.length - 1].estGrade)}</span></div>`;
   }
 
+  // 이번 주 vs 지난 주 요약 (월요일 시작)
+  function weekStart(date) {
+    const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const dow = (d.getDay() + 6) % 7; // 월=0
+    d.setDate(d.getDate() - dow);
+    return d;
+  }
+
+  function renderHistoryWeek() {
+    if (!els.historyWeek) return;
+    const thisStart = weekStart(new Date());
+    const lastStart = new Date(thisStart);
+    lastStart.setDate(lastStart.getDate() - 7);
+    const items = state.history.map(x => ({ x, t: x.createdAt ? new Date(x.createdAt) : null })).filter(o => o.t);
+    const cur = items.filter(o => o.t >= thisStart).map(o => o.x);
+    const prev = items.filter(o => o.t >= lastStart && o.t < thisStart).map(o => o.x);
+    const avg = arr => arr.length ? Math.round(arr.reduce((sum, x) => sum + (x.wordCount || 0), 0) / arr.length) : 0;
+    const best = arr => arr.reduce((b, x) => (gradeRank(x.estGrade) > gradeRank(b) ? x.estGrade : b), '-');
+    const bestCur = best(cur);
+    const bestPrev = best(prev);
+    const diffCount = prev.length ? cur.length - prev.length : null;
+    const diffWords = prev.length && cur.length ? avg(cur) - avg(prev) : null;
+    const diffGrade = bestCur !== '-' && bestPrev !== '-' ? gradeRank(bestCur) - gradeRank(bestPrev) : null;
+    const delta = (n, unit) => {
+      if (n === null) return '<span class="stat-delta muted">지난주 기록 없음</span>';
+      if (n === 0) return '<span class="stat-delta muted">지난주와 같아요</span>';
+      return `<span class="stat-delta ${n > 0 ? 'up' : 'down'}">${n > 0 ? '+' : ''}${n}${unit} 지난주 대비</span>`;
+    };
+    els.historyWeek.innerHTML = `
+      <div class="stat"><span class="stat-val">${cur.length}</span><span class="stat-cap">이번 주 답변</span>${delta(diffCount, '개')}</div>
+      <div class="stat"><span class="stat-val">${avg(cur)}</span><span class="stat-cap">평균 단어</span>${delta(diffWords, '단어')}</div>
+      <div class="stat"><span class="stat-val">${esc(bestCur)}</span><span class="stat-cap">이번 주 최고</span>${delta(diffGrade, '단계')}</div>`;
+  }
+
   function renderHistory() {
     els.historyCountBadge.textContent = state.history.length;
+    renderHistoryWeek();
     if (els.takeCountChip) {
       els.takeCountChip.innerHTML = `${icon('mic')}녹음 ${state.takeIds.size}개 저장됨 · 최근 ${TAKE_LIMIT}개까지`;
     }
