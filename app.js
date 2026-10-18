@@ -1,4 +1,4 @@
-// 오픽 스튜디오 - 메인 애플리케이션 로직
+// 말문 (오픽 말하기 연습) - 메인 애플리케이션 로직
 (function () {
   const DATA = window.OPIC_DATA;
 
@@ -8,6 +8,8 @@
       id: 'beginner0',
       icon: 'sprout',
       name: '왕초보',
+      desc: '단어 위주로 겨우 대답해요',
+      tone: 'tone-emerald',
       currentGrade: 'IL',
       targetGrade: 'IM2',
       difficulty: 3,
@@ -20,6 +22,8 @@
       id: 'beginner',
       icon: 'leaf',
       name: '초보',
+      desc: '짧은 문장은 되지만 40초 넘기기 힘들어요',
+      tone: 'tone-sky',
       currentGrade: 'IM1',
       targetGrade: 'IM3',
       difficulty: 4,
@@ -32,6 +36,8 @@
       id: 'intermediate',
       icon: 'trending',
       name: '중수',
+      desc: '일상 주제는 OK, 롤플레이·1분 구성이 고민',
+      tone: 'tone-indigo',
       currentGrade: 'IM3',
       targetGrade: 'IH',
       difficulty: 5,
@@ -44,6 +50,8 @@
       id: 'advanced',
       icon: 'crown',
       name: '고수',
+      desc: '필러·감정 표현·14~15번으로 AL 도전',
+      tone: 'tone-amber',
       currentGrade: 'IH',
       targetGrade: 'AL',
       difficulty: 6,
@@ -80,6 +88,16 @@
     { id: 'single', label: '자기소개' }
   ];
   const TAB_VIEWS = ['home', 'practice', 'notebook', 'history'];
+  const TARGET_GRADES = [
+    { id: 'IM2', desc: '왕초보 탈출 · 기본 문장으로 끝까지 답하기', icon: 'sig1', tone: 'tone-emerald' },
+    { id: 'IM3', desc: '기업 기본 가점 안정권', icon: 'sig2', tone: 'tone-sky' },
+    { id: 'IH', desc: '가장 많이 목표로 하는 고득점', icon: 'sig3', tone: 'tone-indigo' },
+    { id: 'AL', desc: '최고 등급 · 원어민처럼 자연스럽게', icon: 'crown', tone: 'tone-amber' }
+  ];
+  const OB_STEP_COUNT = 5;
+  const TAKE_DB_NAME = 'malmun';
+  const TAKE_STORE = 'takes';
+  const TAKE_LIMIT = 100;
   const PREP_RING_LEN = 339.3;
 
   const readJSON = (key, fallback) => {
@@ -132,10 +150,9 @@
     settings: readJSON('opic_settings', null) || {
       targetGrade: 'IM3',
       speechRate: '0.95',
-      prepSeconds: '5',
-      aiProvider: 'builtin',
-      apiKey: ''
+      prepSeconds: '5'
     },
+    takeIds: new Set(),
     notebook: readJSON('opic_notebook', null) || [
       {
         id: 'default_1',
@@ -286,6 +303,7 @@
     btnSaveNoteConfirm: $('btnSaveNoteConfirm'),
 
     historyCountBadge: $('historyCountBadge'),
+    takeCountChip: $('takeCountChip'),
     historyChart: $('historyChart'),
     historyListContainer: $('historyListContainer'),
     btnClearHistory: $('btnClearHistory'),
@@ -297,15 +315,29 @@
     settingTargetGrade: $('settingTargetGrade'),
     settingSpeechRate: $('settingSpeechRate'),
     settingPrepSeconds: $('settingPrepSeconds'),
-    settingAiProvider: $('settingAiProvider'),
-    settingApiKey: $('settingApiKey'),
+    btnRedoOnboarding: $('btnRedoOnboarding'),
     saveSettingsBtn: $('saveSettingsBtn'),
+
+    // 온보딩
+    obProgress: $('obProgress'),
+    obSteps: document.querySelectorAll('#view-onboarding .ob-step'),
+    obBackBtn: $('obBackBtn'),
+    obNextBtn: $('obNextBtn'),
+    obHomeBtn: $('obHomeBtn'),
+    obTierList: $('obTierList'),
+    obTargetList: $('obTargetList'),
+    obSurveyContainer: $('obSurveyContainer'),
+    obSurveyCount: $('obSurveyCount'),
+    obSummary: $('obSummary'),
     pwaInstallBtn: $('pwaInstallBtn'),
     toastMsg: $('toastMsg')
   };
 
   // --- 초기화 ---
   function init() {
+    // 예전 버전에 남아 있던 가짜 AI 설정 칸 값 정리
+    delete state.settings.aiProvider;
+    delete state.settings.apiKey;
     applyTheme();
     document.querySelectorAll('select.input').forEach(enhanceSelect);
     filterActiveSetsBySurvey();
@@ -323,7 +355,10 @@
     drawIdleWaveform();
     bindEvents();
     setupPwaInstall();
+    registerServiceWorker();
+    loadTakeIds();
     els.homeDateLabel.textContent = new Date().toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long' });
+    if (!localStorage.getItem('opic_onboarded')) startOnboarding();
   }
 
   // --- 유틸 ---
@@ -426,7 +461,7 @@
   }
 
   // --- 홈: 티어 및 등급 로드맵 ---
-  function selectUserTier(tierKey) {
+  function selectUserTier(tierKey, { silent = false } = {}) {
     const preset = TIER_PRESETS[tierKey] || TIER_PRESETS.beginner;
     state.userTier = preset.id;
     state.currentGrade = preset.currentGrade;
@@ -442,7 +477,7 @@
 
     renderUserTierAndRoadmap();
     renderSurveyScreen();
-    showToast(`${preset.name} 맞춤 설정 완료 · 목표 ${preset.targetGrade}`);
+    if (!silent) showToast(`${preset.name} 맞춤 설정 완료 · 목표 ${preset.targetGrade}`);
   }
 
   function renderUserTierAndRoadmap() {
@@ -521,19 +556,25 @@
   // --- 서베이 & 난이도 ---
   function renderSurveyScreen() {
     els.surveyCountBadge.textContent = `${state.selectedSurveyIds.length}개 선택`;
+    if (els.obSurveyCount) els.obSurveyCount.textContent = `${state.selectedSurveyIds.length}개`;
+    renderSurveyChips(els.surveyCategoriesContainer);
+    if (els.obSurveyContainer) renderSurveyChips(els.obSurveyContainer);
+    renderDifficultyCards();
+  }
 
+  function renderSurveyChips(container) {
     const grouped = {};
     DATA.surveyTopics.forEach(t => {
       if (!grouped[t.category]) grouped[t.category] = [];
       grouped[t.category].push(t);
     });
 
-    els.surveyCategoriesContainer.innerHTML = '';
+    container.innerHTML = '';
     Object.keys(grouped).forEach(cat => {
       const label = document.createElement('div');
       label.className = 'survey-category-label';
       label.textContent = cat;
-      els.surveyCategoriesContainer.appendChild(label);
+      container.appendChild(label);
 
       const grid = document.createElement('div');
       grid.className = 'survey-chip-grid';
@@ -562,9 +603,11 @@
         grid.appendChild(chip);
       });
 
-      els.surveyCategoriesContainer.appendChild(grid);
+      container.appendChild(grid);
     });
+  }
 
+  function renderDifficultyCards() {
     els.difficultyCards.forEach(card => {
       const d = parseInt(card.dataset.diff, 10);
       const isMatch = (d === 3 && state.difficulty <= 3) || (d === 4 && state.difficulty === 4) || (d === 5 && state.difficulty >= 5);
@@ -836,6 +879,7 @@
     state.recordingMode = mode;
     state.isRecording = true;
     state.recordingSeconds = 0;
+    if (mode === 'studio') beginPendingTake();
 
     try {
       state.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -997,20 +1041,45 @@
   }
 
   // --- 오디오 녹음 & 실시간 파형 ---
+  // 브라우저가 지원하는 녹음 형식 고르기 (Chrome/Edge: webm, iPhone Safari: mp4)
+  function pickRecordingMime() {
+    if (!window.MediaRecorder || typeof MediaRecorder.isTypeSupported !== 'function') return '';
+    return ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus', 'audio/mpeg']
+      .find(t => MediaRecorder.isTypeSupported(t)) || '';
+  }
+
+  function audioExt(mime) {
+    if (/mp4|aac|m4a/.test(mime)) return 'm4a';
+    if (/ogg/.test(mime)) return 'ogg';
+    if (/mpeg/.test(mime)) return 'mp3';
+    return 'webm';
+  }
+
+  let lastRecordingUrl = null;
+
   function setupAudioRecorderAndVisualizer(stream) {
     state.audioChunks = [];
     try {
-      state.mediaRecorder = new MediaRecorder(stream);
+      const mime = pickRecordingMime();
+      state.mediaRecorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+      const actualMime = state.mediaRecorder.mimeType || mime || 'audio/webm';
       state.mediaRecorder.ondataavailable = (e) => {
         if (e.data && e.data.size > 0) state.audioChunks.push(e.data);
       };
       state.mediaRecorder.onstop = () => {
         if (state.audioChunks.length > 0) {
-          const blob = new Blob(state.audioChunks, { type: 'audio/webm' });
-          const url = URL.createObjectURL(blob);
-          els.recordedAudioPlayer.src = url;
-          els.downloadAudioLink.href = url;
+          const blob = new Blob(state.audioChunks, { type: actualMime });
+          if (lastRecordingUrl) URL.revokeObjectURL(lastRecordingUrl);
+          lastRecordingUrl = URL.createObjectURL(blob);
+          els.recordedAudioPlayer.src = lastRecordingUrl;
+          els.downloadAudioLink.href = lastRecordingUrl;
+          els.downloadAudioLink.download = `malmun-answer.${audioExt(actualMime)}`;
           els.audioPlaybackBar.style.display = 'flex';
+          if (pendingTake) {
+            pendingTake.blob = blob;
+            pendingTake.mimeType = actualMime;
+            commitPendingTake();
+          }
         }
       };
       state.mediaRecorder.start();
@@ -1075,6 +1144,144 @@
       drawBars(ctx, canvas, vals, (i, h) => (h > 14 ? primary : muted));
     }
     frame();
+  }
+
+  // --- 테이크 저장소 (IndexedDB "malmun" / "takes") ---
+  // 테이크 = 답변 1회의 녹음 파일 + 스크립트 + 지표. 기록(opic_history)의 takeId와 연결된다.
+  let takeDbPromise = null;
+  function openTakeDb() {
+    if (takeDbPromise) return takeDbPromise;
+    takeDbPromise = new Promise((resolve, reject) => {
+      if (!('indexedDB' in window)) { reject(new Error('IndexedDB 미지원')); return; }
+      const req = indexedDB.open(TAKE_DB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(TAKE_STORE)) {
+          const store = db.createObjectStore(TAKE_STORE, { keyPath: 'id' });
+          store.createIndex('createdAt', 'createdAt');
+          store.createIndex('questionKey', 'questionKey');
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    takeDbPromise.catch(() => { takeDbPromise = null; });
+    return takeDbPromise;
+  }
+
+  function takeTx(mode, run) {
+    return openTakeDb().then(db => new Promise((resolve, reject) => {
+      const tx = db.transaction(TAKE_STORE, mode);
+      let req;
+      try { req = run(tx.objectStore(TAKE_STORE)); } catch (e) { reject(e); return; }
+      tx.oncomplete = () => resolve(req && 'result' in req ? req.result : undefined);
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    }));
+  }
+
+  const takes = {
+    put: (take) => takeTx('readwrite', s => s.put(take)),
+    get: (id) => takeTx('readonly', s => s.get(id)),
+    remove: (id) => takeTx('readwrite', s => s.delete(id)),
+    keys: () => takeTx('readonly', s => s.getAllKeys()),
+    clear: () => takeTx('readwrite', s => s.clear()),
+    // 오래된 테이크부터 지워 최근 TAKE_LIMIT개만 보관
+    prune: () => openTakeDb().then(db => new Promise(resolve => {
+      const tx = db.transaction(TAKE_STORE, 'readwrite');
+      const index = tx.objectStore(TAKE_STORE).index('createdAt');
+      const countReq = index.count();
+      countReq.onsuccess = () => {
+        let extra = countReq.result - TAKE_LIMIT;
+        if (extra <= 0) return;
+        index.openCursor().onsuccess = (e) => {
+          const cur = e.target.result;
+          if (!cur || extra <= 0) return;
+          state.takeIds.delete(cur.primaryKey);
+          cur.delete();
+          extra -= 1;
+          cur.continue();
+        };
+      };
+      tx.oncomplete = resolve;
+      tx.onerror = resolve;
+      tx.onabort = resolve;
+    }))
+  };
+
+  function loadTakeIds() {
+    takes.keys().then(keys => {
+      state.takeIds = new Set(keys || []);
+      renderHistory();
+    }).catch(() => {});
+  }
+
+  // 녹음 파일(onstop)과 기록 항목(savePracticeHistoryItem)은 완료 시점이 달라서
+  // 둘 다 모이면 그때 저장한다.
+  let pendingTake = null;
+  function beginPendingTake() {
+    pendingTake = {
+      id: 'take_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      blob: null,
+      mimeType: '',
+      meta: null
+    };
+    return pendingTake;
+  }
+
+  function commitPendingTake() {
+    const p = pendingTake;
+    if (!p || !p.blob || !p.meta) return;
+    pendingTake = null;
+    const take = Object.assign({ id: p.id }, p.meta, { audio: p.blob, mimeType: p.mimeType });
+    takes.put(take)
+      .then(() => { state.takeIds.add(take.id); return takes.prune(); })
+      .then(() => renderHistory())
+      .catch(() => showToast('녹음 파일을 저장하지 못했어요 (스크립트는 기록에 남아요)'));
+  }
+
+  function questionKeyOf(set, qIndex) {
+    return `${set.id}#${qIndex}`;
+  }
+
+  const takeUrls = new Map();
+  async function toggleTakePlayer(takeId, btn) {
+    const card = btn.closest('.history-card');
+    if (!card) return;
+    const slot = card.querySelector('.take-player');
+    if (!slot.hidden) {
+      slot.hidden = true;
+      slot.innerHTML = '';
+      return;
+    }
+    try {
+      let url = takeUrls.get(takeId);
+      if (!url) {
+        const take = await takes.get(takeId);
+        if (!take || !take.audio) { showToast('녹음 파일을 찾을 수 없어요'); return; }
+        url = URL.createObjectURL(take.audio);
+        takeUrls.set(takeId, url);
+      }
+      slot.innerHTML = `${icon('volume')}<audio controls src="${url}"></audio>`;
+      slot.hidden = false;
+      slot.querySelector('audio').play().catch(() => {});
+    } catch (_) {
+      showToast('녹음을 불러오지 못했어요');
+    }
+  }
+
+  function deleteHistoryItem(id) {
+    const item = state.history.find(h => h.id === id);
+    if (!item) return;
+    state.history = state.history.filter(h => h.id !== id);
+    localStorage.setItem('opic_history', JSON.stringify(state.history));
+    if (item.takeId) {
+      state.takeIds.delete(item.takeId);
+      takes.remove(item.takeId).catch(() => {});
+    }
+    renderHistory();
+    renderHomeSummary();
+    showToast('기록을 삭제했어요');
   }
 
   // --- 발화 스크립트 정밀 지표 & 등급 도달 계산기 ---
@@ -1405,6 +1612,10 @@
       els.liveTranscriptInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
       showToast('모범답안을 불러왔어요. 소리 내어 읽어보세요');
     } else if (action === 'delete-note') deleteNote(id);
+    else if (action === 'play-take') toggleTakePlayer(id, btn);
+    else if (action === 'delete-history') { if (confirm('이 기록과 녹음을 삭제할까요?')) deleteHistoryItem(id); }
+    else if (action === 'ob-tier') { ob.tier = id; ob.target = TIER_PRESETS[id].targetGrade; renderObTiers(); }
+    else if (action === 'ob-target') { ob.target = id; renderObTargets(); }
     else if (action === 'toggle-ko') btn.classList.toggle('hidden-ko');
     else if (action === 'go-home') navigateTo('home');
     else if (action === 'go-setup') navigateTo('setup');
@@ -1458,23 +1669,47 @@
 
   function savePracticeHistoryItem() {
     const text = els.liveTranscriptInput.value.trim();
-    if (!text) return;
+    const seconds = state.recordingSeconds || 0;
+    // 스크립트가 없어도 3초 이상 녹음했으면 테이크로 남긴다 (음성 인식 미지원 브라우저 대비)
+    if (!text && seconds < 3) return;
+    const set = getCurrentSet();
     const q = getCurrentQuestion();
-    const m = analyzeTranscriptMetrics(text, state.recordingSeconds || 45);
+    const m = analyzeTranscriptMetrics(text, seconds || 45);
     const now = new Date();
-    state.history.unshift({
-      id: 'h_' + Date.now(),
+    const takeId = pendingTake ? pendingTake.id : null;
+    const item = {
+      id: 'h_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      createdAt: now.toISOString(),
       date: now.toLocaleString('ko-KR'),
       dateKey: now.toLocaleDateString('ko-KR'),
+      questionKey: questionKeyOf(set, state.currentQIndex),
+      setId: set.id,
+      qNum: q.qNum,
       badge: q.badge,
       promptEn: q.promptEn,
       transcript: text,
+      durationSec: seconds,
       wordCount: m.wordCount,
       wpm: m.wpm,
-      estGrade: m.estGrade
-    });
+      estGrade: m.estGrade,
+      takeId
+    };
+    state.history.unshift(item);
     state.history = state.history.slice(0, 50);
     localStorage.setItem('opic_history', JSON.stringify(state.history));
+    if (pendingTake) {
+      pendingTake.meta = {
+        questionKey: item.questionKey,
+        setId: set.id,
+        qNum: q.qNum,
+        badge: q.badge,
+        createdAt: item.createdAt,
+        durationSec: seconds,
+        transcript: text,
+        metrics: { wordCount: m.wordCount, wpm: m.wpm, fillerCount: m.fillerCount, estGrade: m.estGrade }
+      };
+      commitPendingTake();
+    }
     renderHistory();
   }
 
@@ -1497,23 +1732,35 @@
 
   function renderHistory() {
     els.historyCountBadge.textContent = state.history.length;
+    if (els.takeCountChip) {
+      els.takeCountChip.innerHTML = `${icon('mic')}녹음 ${state.takeIds.size}개 저장됨 · 최근 ${TAKE_LIMIT}개까지`;
+    }
     renderHistoryChart();
     if (state.history.length === 0) {
       els.historyListContainer.innerHTML = `<div class="empty"><strong>아직 연습 기록이 없어요</strong>인터뷰에서 답변을 마치면 자동으로 저장돼요.</div>`;
       return;
     }
-    els.historyListContainer.innerHTML = state.history.map(h => `
-      <div class="history-card">
+    els.historyListContainer.innerHTML = state.history.map(h => {
+      const hasTake = !!(h.takeId && state.takeIds.has(h.takeId));
+      const dur = h.durationSec ? ` · ${formatTime(h.durationSec)}` : '';
+      return `
+      <div class="history-card" data-history-id="${esc(h.id)}">
         <div class="history-top">
           <span class="grade-pill">${esc(h.estGrade)}</span>
           <span class="li-body">
             <span class="li-title">${esc(h.badge)}</span>
-            <span class="li-sub">${esc(h.wordCount)}단어 · ${esc(h.wpm)} WPM · ${esc(h.date)}</span>
+            <span class="li-sub">${esc(h.wordCount)}단어 · ${esc(h.wpm)} WPM${dur} · ${esc(h.date)}</span>
+          </span>
+          <span class="note-actions">
+            ${hasTake ? `<button class="icon-only sm" data-action="play-take" data-id="${esc(h.takeId)}" aria-label="다시 듣기">${icon('play')}</button>` : ''}
+            <button class="icon-only sm" data-action="delete-history" data-id="${esc(h.id)}" aria-label="삭제">${icon('trash')}</button>
           </span>
         </div>
         <div class="history-q">Q. ${esc(h.promptEn)}</div>
-        <div class="history-a">${esc(h.transcript)}</div>
-      </div>`).join('');
+        ${h.transcript ? `<div class="history-a">${esc(h.transcript)}</div>` : `<div class="history-a caption">스크립트 없음 · 녹음만 저장됨</div>`}
+        <div class="take-player" hidden></div>
+      </div>`;
+    }).join('');
   }
 
   // --- 커스텀 드롭다운 (값은 숨긴 네이티브 select에 그대로 저장) ---
@@ -1657,6 +1904,7 @@
       if (openDropdown) { closeDropdown(); return; }
       const open = document.querySelector('.modal-overlay.open');
       if (open) open.classList.remove('open');
+      else if (state.currentView === 'onboarding') { if (ob.step > 0) obGo(ob.step - 1); }
       else if (!TAB_VIEWS.includes(state.currentView)) goBack();
     });
 
@@ -1805,10 +2053,13 @@
     };
 
     els.btnClearHistory.onclick = () => {
-      if (confirm('연습 기록을 모두 삭제할까요?')) {
+      if (confirm('연습 기록과 저장된 녹음을 모두 삭제할까요?')) {
         state.history = [];
         localStorage.removeItem('opic_history');
+        state.takeIds = new Set();
+        takes.clear().catch(() => {});
         renderHistory();
+        renderHomeSummary();
       }
     };
 
@@ -1817,8 +2068,6 @@
       els.settingTargetGrade.value = state.settings.targetGrade || 'IM3';
       els.settingSpeechRate.value = state.settings.speechRate || '0.95';
       els.settingPrepSeconds.value = state.settings.prepSeconds || '5';
-      els.settingAiProvider.value = state.settings.aiProvider || 'builtin';
-      els.settingApiKey.value = state.settings.apiKey || '';
       renderThemeSeg();
       refreshDropdowns();
       els.settingsModal.classList.add('open');
@@ -1842,9 +2091,7 @@
       state.settings = {
         targetGrade: els.settingTargetGrade.value,
         speechRate: els.settingSpeechRate.value,
-        prepSeconds: els.settingPrepSeconds.value,
-        aiProvider: els.settingAiProvider.value,
-        apiKey: els.settingApiKey.value
+        prepSeconds: els.settingPrepSeconds.value
       };
       localStorage.setItem('opic_settings', JSON.stringify(state.settings));
       renderUserTierAndRoadmap();
@@ -1852,7 +2099,122 @@
       els.settingsModal.classList.remove('open');
       showToast('설정을 저장했어요');
     };
+    els.btnRedoOnboarding.onclick = () => {
+      closeDropdown();
+      els.settingsModal.classList.remove('open');
+      startOnboarding();
+    };
 
+    // 온보딩
+    els.obBackBtn.onclick = () => obGo(ob.step - 1);
+    els.obNextBtn.onclick = () => {
+      if (ob.step === 3 && state.selectedSurveyIds.length === 0) return showToast('주제를 1개 이상 골라주세요');
+      if (ob.step >= OB_STEP_COUNT - 1) finishOnboarding(true);
+      else obGo(ob.step + 1);
+    };
+    els.obHomeBtn.onclick = () => finishOnboarding(false);
+  }
+
+  // --- 첫 실행 온보딩 ---
+  let ob = { step: 0, tier: 'beginner', target: 'IM3' };
+
+  function startOnboarding() {
+    const tier = TIER_PRESETS[state.userTier] ? state.userTier : 'beginner';
+    ob = { step: 0, tier, target: state.settings.targetGrade || TIER_PRESETS[tier].targetGrade };
+    navigateTo('onboarding');
+    renderOnboarding();
+  }
+
+  function obGo(step) {
+    ob.step = Math.max(0, Math.min(OB_STEP_COUNT - 1, step));
+    renderOnboarding();
+  }
+
+  function renderOnboarding() {
+    els.obProgress.innerHTML = Array.from({ length: OB_STEP_COUNT }, (_, i) =>
+      `<span class="${i < ob.step ? 'done' : i === ob.step ? 'active' : ''}"></span>`).join('');
+    els.obSteps.forEach(sec => sec.classList.toggle('active', parseInt(sec.dataset.step, 10) === ob.step));
+    els.obBackBtn.style.visibility = ob.step === 0 ? 'hidden' : 'visible';
+    els.obHomeBtn.hidden = ob.step !== OB_STEP_COUNT - 1;
+
+    const labels = ['시작하기', '다음', '다음', '다음', '첫 질문 들어보기'];
+    els.obNextBtn.innerHTML = ob.step === OB_STEP_COUNT - 1
+      ? `${icon('mic', 'ic')}${labels[ob.step]}`
+      : `${labels[ob.step]}${icon('right', 'ic')}`;
+
+    if (ob.step === 1) renderObTiers();
+    if (ob.step === 2) renderObTargets();
+    if (ob.step === 3) renderSurveyScreen();
+    if (ob.step === 4) renderObSummary();
+    window.scrollTo({ top: 0 });
+  }
+
+  function renderObTiers() {
+    els.obTierList.innerHTML = Object.values(TIER_PRESETS).map(p => `
+      <button class="option-card ${p.id === ob.tier ? 'selected' : ''}" data-action="ob-tier" data-id="${p.id}">
+        <span class="icon-tile md ${p.tone}">${icon(p.icon, 'ic')}</span>
+        <span class="option-body"><span class="option-title">${esc(p.name)}</span><span class="option-desc">${esc(p.desc)}</span></span>
+        <span class="option-tag">${p.currentGrade} → ${p.targetGrade}</span>
+      </button>`).join('');
+  }
+
+  function renderObTargets() {
+    els.obTargetList.innerHTML = TARGET_GRADES.map(g => `
+      <button class="option-card ${g.id === ob.target ? 'selected' : ''}" data-action="ob-target" data-id="${g.id}">
+        <span class="icon-tile md ${g.tone}">${icon(g.icon, 'ic')}</span>
+        <span class="option-body"><span class="option-title">${g.id}</span><span class="option-desc">${esc(g.desc)}</span></span>
+        ${g.id === ob.target ? `<span class="option-tag">${icon('check', 'ic ic-sm')}</span>` : ''}
+      </button>`).join('');
+  }
+
+  function renderObSummary() {
+    const p = TIER_PRESETS[ob.tier];
+    const names = state.selectedSurveyIds
+      .map(id => (DATA.surveyTopics.find(t => t.id === id) || {}).name)
+      .filter(Boolean)
+      .map(n => n.replace(/\s*\(.*\)$/, ''));
+    const preview = names.slice(0, 3).join(', ') + (names.length > 3 ? ` 외 ${names.length - 3}개` : '');
+    els.obSummary.innerHTML = `
+      <div class="ob-sum-row">
+        <span class="icon-tile md ${p.tone}">${icon(p.icon, 'ic')}</span>
+        <span class="ob-sum-body"><span class="ob-sum-k">내 레벨</span><span class="ob-sum-v">${esc(p.name)} · 지금 ${p.currentGrade}</span></span>
+      </div>
+      <div class="ob-sum-row">
+        <span class="icon-tile md tone-primary">${icon('target', 'ic')}</span>
+        <span class="ob-sum-body"><span class="ob-sum-k">목표 등급</span><span class="ob-sum-v">${esc(ob.target)}</span></span>
+      </div>
+      <div class="ob-sum-row">
+        <span class="icon-tile md tone-emerald">${icon('list', 'ic')}</span>
+        <span class="ob-sum-body"><span class="ob-sum-k">서베이 주제 ${names.length}개</span><span class="ob-sum-v">${esc(preview)}</span></span>
+      </div>
+      <div class="ob-sum-row">
+        <span class="icon-tile md tone-amber">${icon('clock', 'ic')}</span>
+        <span class="ob-sum-body"><span class="ob-sum-k">에바 속도 · 준비 시간</span><span class="ob-sum-v">${p.speechRate}x · ${p.prepSeconds}초</span></span>
+      </div>`;
+  }
+
+  function finishOnboarding(goStudio) {
+    selectUserTier(ob.tier, { silent: true });
+    state.settings.targetGrade = ob.target;
+    localStorage.setItem('opic_settings', JSON.stringify(state.settings));
+    localStorage.setItem('opic_onboarded', '1');
+    renderUserTierAndRoadmap();
+    renderPracticeList();
+    filterActiveSetsBySurvey();
+    if (goStudio) {
+      openStudio({ autoPlay: true });
+    } else {
+      navigateTo('home');
+    }
+    showToast(`준비 완료 · ${TIER_PRESETS[ob.tier].name} · 목표 ${ob.target}`);
+  }
+
+  // --- 서비스워커 (설치·오프라인) ---
+  function registerServiceWorker() {
+    if (!('serviceWorker' in navigator)) return;
+    const isLocal = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+    if (location.protocol !== 'https:' && !isLocal) return;
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
   }
 
   function setupPwaInstall() {
